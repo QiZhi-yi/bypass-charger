@@ -1,7 +1,7 @@
 # File: module.prop
 id=bypass_charger
 name=自动旁路供电
-version=v10.0.2
-versionCode=102
-author=小意同学 (@酷安 爱哭的小女孩龍)
-description=利用厂商夜间充电实现旁路供电。作者 小意同学 在原版(酷安@柳下惠77)基础上改进，适配 Android 17 / HyperOS 4：控制节点自动探测、修复重复实例、新增 KsuWebUI 控制面板，可在界面内开关模块并设置充电阈值。
+version=v10.0.3
+versionCode=103
+author=爱哭的小女孩龍
+description=利用厂商夜间充电实现旁路供电，可设 80-100% 充电上限，支持 KsuWebUI 图形控制。原作者：酷安@柳下惠77（原版 v9.9）；本版由作者适配 Android 17 / HyperOS 4 并重构。
