@@ -77,7 +77,7 @@ su -c 'find /sys/devices -maxdepth 7 -name "smart_night"'
 
 ## 安装
 
-1. 下载 Release 中的 `自动旁路供电_v10.0_HyperOS4.zip`
+1. 下载 Release 中的 `bypass-charger-v10.0.1.zip`
 2. 打开 KernelSU / Magisk 管理器 → **模块** → **从本地安装**
 3. 选择 zip → 安装完成 → **重启设备**
 
@@ -313,6 +313,11 @@ adb logcat -s bypass_webui
 没有。节点只影响「插着电时是否给电池充电」，拔掉后完全由系统正常管理。
 
 ## 更新日志
+
+### v10.0.1
+
+- **修复**：Release 附件因中文文件名被 GitHub 清洗，下载后变成 `_v10.0.zip`；
+  改为纯 ASCII 文件名 `bypass-charger-v*.zip`。模块功能无变化。
 
 ### v10.0
 

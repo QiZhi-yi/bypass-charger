@@ -7,11 +7,13 @@
     python build_zip.py
 
 输出:
-    自动旁路供电_v<版本>.zip
+    bypass-charger-<版本>.zip
 
 注意:
     zip 内路径必须用正斜杠。Windows 的 Compress-Archive 会写成反斜杠，
     Android 端解压时会被当成单个文件名，导致模块安装失败。
+    文件名必须用纯 ASCII：GitHub Release 会清洗中文等非 ASCII 字符，
+    导致下载下来变成 "_v10.0.zip" 这种残缺名字。
 """
 
 import os
@@ -64,7 +66,7 @@ def resolve(candidates):
 
 def main():
     version = read_version()
-    out = os.path.join(BASE, "自动旁路供电_%s.zip" % version)
+    out = os.path.join(BASE, "bypass-charger-%s.zip" % version)
 
     entries = []
     for arc, candidates in FILES:
