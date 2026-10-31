@@ -1,0 +1,15 @@
+# 统一换行符为 LF。
+# 这些脚本最终跑在 Android 的 /system/bin/sh 上，
+# 一旦被转成 CRLF，会报 "syntax error: unexpected '\r'" 直接无法运行。
+* text=auto eol=lf
+*.sh           text eol=lf
+*.prop         text eol=lf
+*.py           text eol=lf
+*.md           text eol=lf
+*.html         text eol=lf
+*.yml          text eol=lf
+*.json         text eol=lf
+*.css          text eol=lf
+update-binary  text eol=lf
+updater-script text eol=lf
+*.zip          binary

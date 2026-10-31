@@ -1,0 +1,17 @@
+# 构建产物
+*.zip
+
+# 运行时生成
+config.sh
+config.sh.bak
+config.sh.old*
+bypass.log
+daemon.pid
+node.path
+.lock/
+stage/
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+*.swp

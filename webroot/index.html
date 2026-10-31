@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>自动旁路供电</title>
+<style>
+  :root{
+    --bg:#0e1014; --card:#171a21; --card2:#1e222b; --line:#272c36;
+    --tx:#e9ecf1; --tx2:#8d95a3; --acc:#3ddc97; --acc2:#2dbd80;
+    --warn:#f5b942; --red:#f0716c; --blue:#5aa9f0;
+    --r:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  body{padding:16px 14px calc(28px + env(safe-area-inset-bottom))}
+  .wrap{max-width:520px;margin:0 auto}
+
+  header{display:flex;align-items:center;gap:10px;margin:4px 2px 16px}
+  .h-title{font-size:19px;font-weight:650;letter-spacing:.2px}
+  .h-sub{font-size:12px;color:var(--tx2);margin-top:1px}
+  .badge{margin-left:auto;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;
+    background:var(--card2);color:var(--tx2);border:1px solid var(--line);white-space:nowrap;
+    transition:.25s}
+  .badge.on{background:rgba(61,220,151,.14);color:var(--acc);border-color:rgba(61,220,151,.35)}
+  .badge.off{background:rgba(141,149,163,.12);color:var(--tx2)}
+  .badge.err{background:rgba(240,113,108,.14);color:var(--red);border-color:rgba(240,113,108,.3)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px;margin-bottom:12px}
+  .card-t{font-size:12.5px;font-weight:600;color:var(--tx2);letter-spacing:.4px;
+    text-transform:uppercase;margin-bottom:13px}
+
+  /* 主状态卡 */
+  .hero{display:flex;align-items:center;gap:18px;padding:18px 16px}
+  .ring{position:relative;width:118px;height:118px;flex:0 0 auto}
+  .ring svg{transform:rotate(-90deg);display:block}
+  .ring .arc{fill:none;stroke:var(--line);stroke-width:9}
+  .ring .bar{fill:none;stroke:var(--acc);stroke-width:9;stroke-linecap:round;
+    transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1),stroke .3s}
+  .ring .in{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center}
+  .ring .pct{font-size:27px;font-weight:700;letter-spacing:-.5px;line-height:1}
+  .ring .pct small{font-size:13px;font-weight:600;color:var(--tx2);margin-left:1px}
+  .ring .cap{font-size:10.5px;color:var(--tx2);margin-top:3px;letter-spacing:.5px}
+
+  .hero-r{flex:1;min-width:0}
+  .state{font-size:17px;font-weight:650;margin-bottom:2px}
+  .state-d{font-size:12.5px;color:var(--tx2);margin-bottom:11px}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .m{background:var(--card2);border-radius:10px;padding:8px 10px}
+  .m-k{font-size:10.5px;color:var(--tx2);letter-spacing:.3px}
+  .m-v{font-size:14px;font-weight:600;margin-top:1px;font-variant-numeric:tabular-nums}
+
+  /* 开关行 */
+  .row{display:flex;align-items:center;gap:12px}
+  .row-t{font-size:15px;font-weight:550}
+  .row-d{font-size:12px;color:var(--tx2);margin-top:1px}
+  .switch{margin-left:auto;position:relative;width:50px;height:29px;flex:0 0 auto}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .switch span{position:absolute;inset:0;background:#333945;border-radius:999px;
+    transition:.25s;cursor:pointer}
+  .switch span::after{content:"";position:absolute;width:23px;height:23px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .switch input:checked + span{background:var(--acc2)}
+  .switch input:checked + span::after{transform:translateX(21px)}
+  .switch input:disabled + span{opacity:.45}
+
+  /* 滑块 */
+  .sl{margin-bottom:16px}
+  .sl:last-of-type{margin-bottom:6px}
+  .sl-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .sl-l{font-size:13.5px;color:var(--tx)}
+  .sl-v{font-size:14.5px;font-weight:650;color:var(--acc);font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;
+    background:#2b3140;outline:none;margin:0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:21px;height:21px;
+    border-radius:50%;background:#fff;border:3px solid var(--acc2);cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.45)}
+  .hint{font-size:11.5px;color:var(--tx2);margin-top:9px;line-height:1.5}
+
+  button{width:100%;padding:12px;border-radius:11px;border:none;font-size:14.5px;
+    font-weight:600;font-family:inherit;cursor:pointer;transition:.18s;
+    background:var(--acc2);color:#07130d}
+  button:active{transform:scale(.985);opacity:.88}
+  button:disabled{opacity:.4;transform:none}
+  .btn-ghost{background:var(--card2);color:var(--tx);border:1px solid var(--line)}
+
+  /* 日志 */
+  pre.log{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;
+    line-height:1.65;color:#9aa4b2;max-height:190px;overflow-y:auto;
+    background:#0b0d11;border-radius:10px;padding:11px;white-space:pre-wrap;
+    word-break:break-all;border:1px solid #1d222b}
+
+  .foot{text-align:center;font-size:11px;color:#5c6473;margin-top:18px;line-height:1.7}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;color:#5c6473;
+    word-break:break-all}
+  .errbox{background:rgba(240,113,108,.1);border:1px solid rgba(240,113,108,.25);
+    color:var(--red);border-radius:12px;padding:12px;font-size:13px;margin-bottom:12px;
+    display:none}
+  .opmsg{display:none;border-radius:12px;padding:11px 13px;font-size:13px;
+    margin-bottom:12px;line-height:1.5;word-break:break-all}
+  .opmsg.ok{display:block;background:rgba(61,220,151,.1);border:1px solid rgba(61,220,151,.3);
+    color:var(--acc)}
+  .opmsg.bad{display:block;background:rgba(240,113,108,.1);border:1px solid rgba(240,113,108,.3);
+    color:var(--red)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="h-title">自动旁路供电</div>
+      <div class="h-sub">v10.0 · HyperOS 4 适配</div>
+    </div>
+    <div class="badge off" id="badge">读取中</div>
+  </header>
+
+  <div class="errbox" id="errbox"></div>
+  <div class="opmsg" id="opMsg"></div>
+
+  <section class="card hero">
+    <div class="ring">
+      <svg width="118" height="118" viewBox="0 0 118 118">
+        <circle class="arc" cx="59" cy="59" r="51"></circle>
+        <circle class="bar" id="bar" cx="59" cy="59" r="51"
+                stroke-dasharray="320.4" stroke-dashoffset="320.4"></circle>
+      </svg>
+      <div class="in">
+        <div class="pct"><span id="pct">--</span><small>%</small></div>
+        <div class="cap" id="ringcap">电量</div>
+      </div>
+    </div>
+    <div class="hero-r">
+      <div class="state" id="stateTx">—</div>
+      <div class="state-d" id="stateSub">正在读取状态…</div>
+      <div class="metrics">
+        <div class="m"><div class="m-k">电池电流</div><div class="m-v" id="mI">—</div></div>
+        <div class="m"><div class="m-k">温度</div><div class="m-v" id="mT">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div>
+        <div class="row-t">启用旁路供电</div>
+        <div class="row-d">到达阈值后停止充电，改由适配器供电</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="swEnable">
+        <span></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-t">充电阈值</div>
+
+    <div class="sl">
+      <div class="sl-h">
+        <span class="sl-l">停止充电</span>
+        <span class="sl-v" id="v1">80%</span>
+      </div>
+      <input type="range" id="t1" min="20" max="100" step="1" value="80">
+    </div>
+
+    <div class="sl">
+      <div class="sl-h">
+        <span class="sl-l">恢复充电</span>
+        <span class="sl-v" id="v2">75%</span>
+      </div>
+      <input type="range" id="t2" min="10" max="99" step="1" value="75">
+    </div>
+
+    <div class="hint">恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。</div>
+    <div style="height:12px"></div>
+    <button id="btnSave">保存阈值</button>
+  </section>
+
+  <section class="card">
+    <div class="card-t">巡检间隔</div>
+    <div class="sl">
+      <div class="sl-h">
+        <span class="sl-l">每次检查的间隔</span>
+        <span class="sl-v" id="v3">15 秒</span>
+      </div>
+      <input type="range" id="t3" min="5" max="120" step="5" value="15">
+    </div>
+    <div class="hint">间隔越短响应越快，但唤醒更频繁、略耗电。建议 10–30 秒。</div>
+  </section>
+
+  <section class="card">
+    <div class="card-t">运行日志</div>
+    <pre class="log" id="log">加载中…</pre>
+  </section>
+
+  <section class="card" id="daemonCard" style="display:none">
+    <div class="row">
+      <div>
+        <div class="row-t">守护进程未运行</div>
+        <div class="row-d">自动控制需要守护进程常驻</div>
+      </div>
+      <button class="btn-ghost" id="btnStart" style="width:auto;padding:10px 18px;margin-left:auto">启动</button>
+    </div>
+  </section>
+
+  <div class="foot">
+    <div class="mono" id="nodePath">—</div>
+    <div style="margin-top:6px" id="daemonLine">—</div>
+    <div style="margin-top:4px" id="bridgeInfo">桥接检测中…</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var SH = "/data/adb/modules/bypass_charger/webui.sh";
+  var CIRC = 320.4;              // 2πr, r=51
+  var state = null;
+  var busy = false;
+  var timer = null;
+
+  var el = function(id){ return document.getElementById(id); };
+
+  /* ---------------- KSU 桥接 ----------------
+     KernelSU 是把原生 Java 对象用 addJavascriptInterface 直接暴露成 window.ksu 的，
+     没有 JS 包装层，所以 options 和 callback 都必须能转成 String。
+     不同版本方法签名不一致，这里逐种探测，找到能用的就缓存下来。 */
+
+  var BRIDGE_MODE = null;
+  var BRIDGE_TRIED = [];
+  var cbSeq = 0;
+
+  function hasKsu(){
+    return typeof ksu !== "undefined" && ksu && typeof ksu.exec === "function";
+  }
+
+  function normResult(a, b, c){
+    if (a && typeof a === "object") {
+      return {
+        errno: Number(a.errno || a.code || 0),
+        stdout: String(a.stdout == null ? "" : a.stdout),
+        stderr: String(a.stderr == null ? "" : a.stderr)
+      };
+    }
+    if (typeof a === "string") {
+      var s = a.replace(/^\s+/, "");
+      if (s.charAt(0) === "{") {
+        try {
+          var o = JSON.parse(s);
+          if (o && typeof o === "object") {
+            return {
+              errno: Number(o.errno || 0),
+              stdout: String(o.stdout == null ? "" : o.stdout),
+              stderr: String(o.stderr == null ? "" : o.stderr)
+            };
+          }
+        } catch (e) {}
+      }
+      return { errno: 0, stdout: a, stderr: String(b == null ? "" : b) };
+    }
+    return {
+      errno: Number(a || 0),
+      stdout: String(b == null ? "" : b),
+      stderr: String(c == null ? "" : c)
+    };
+  }
+
+  function execMode(cmd, mode, timeoutMs){
+    return new Promise(function(resolve, reject){
+      var settled = false;
+      var cbName = null;
+
+      function cleanup(){
+        if (cbName && window[cbName]) { try { delete window[cbName]; } catch(e){} }
+      }
+
+      var timer = setTimeout(function(){
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("回调超时"));
+      }, timeoutMs || 2500);
+
+      function fin(a, b, c){
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        resolve(normResult(a, b, c));
+      }
+
+      try {
+        if (mode === 1) {
+          // 签名 exec(String) -> String，同步返回 stdout
+          var r = ksu.exec(cmd);
+          if (r === undefined || r === null) throw new Error("无返回值");
+          fin(0, String(r), "");
+        } else if (mode === 2) {
+          // 签名 exec(String cmd, String optionsJson, String callbackName)
+          cbName = "__ksuCb" + (++cbSeq);
+          window[cbName] = fin;
+          ksu.exec(cmd, "{}", cbName);
+        } else {
+          // 签名 exec(String cmd, String callbackName)
+          cbName = "__ksuCb" + (++cbSeq);
+          window[cbName] = fin;
+          ksu.exec(cmd, cbName);
+        }
+      } catch (e) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          cleanup();
+          reject(e);
+        }
+      }
+    });
+  }
+
+  function probeBridge(){
+    if (!hasKsu()) return Promise.reject(new Error("未检测到 ksu 对象"));
+    BRIDGE_TRIED = [];
+    var modes = [1, 2, 3];
+    var i = 0;
+
+    function next(){
+      if (i >= modes.length) {
+        return Promise.reject(new Error("三种调用方式都不通 — " + BRIDGE_TRIED.join(" ; ")));
+      }
+      var m = modes[i++];
+      return execMode("echo __KSU_OK__", m, 2000).then(function(r){
+        if (r.errno === 0 && r.stdout.indexOf("__KSU_OK__") > -1) {
+          BRIDGE_MODE = m;
+          paintBridge();
+          return m;
+        }
+        BRIDGE_TRIED.push("方式" + m + " 无输出");
+        return next();
+      }).catch(function(e){
+        BRIDGE_TRIED.push("方式" + m + " " + ((e && e.message) || e));
+        return next();
+      });
+    }
+    return next();
+  }
+
+  function paintBridge(){
+    var n = el("bridgeInfo");
+    if (n) n.textContent = BRIDGE_MODE ? ("桥接方式 " + BRIDGE_MODE) : "桥接未就绪";
+  }
+
+  function run(cmd){
+    if (!hasKsu()) {
+      return Promise.reject(new Error("未检测到 KernelSU 接口，请在 KSU 管理器中打开本页"));
+    }
+    var start = BRIDGE_MODE ? Promise.resolve(BRIDGE_MODE) : probeBridge();
+    return start.then(function(mode){
+      return execMode(cmd, mode, 8000).then(function(r){
+        if (r.errno !== 0) {
+          throw new Error((r.stderr || "").replace(/\s+$/, "") || ("退出码 " + r.errno));
+        }
+        return r.stdout;
+      });
+    }).catch(function(e){
+      BRIDGE_MODE = null;   // 下次重新探测
+      throw e;
+    });
+  }
+
+  function toast(msg){
+    if (typeof ksu !== "undefined" && ksu && typeof ksu.toast === "function") {
+      try { ksu.toast(msg); return; } catch(e){}
+    }
+    var b = el("errbox");
+    b.textContent = msg; b.style.display = "block";
+    setTimeout(function(){ b.style.display = "none"; }, 2600);
+  }
+
+  function parseKV(txt){
+    var o = {};
+    // 后端按单行 "A=1;B=2;..." 输出，同时兼容换行分隔
+    String(txt || "").split(/[\n;]/).forEach(function(line){
+      var i = line.indexOf("=");
+      if (i > 0) o[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    });
+    return o;
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function paint(s){
+    var cap = parseInt(s.CAP, 10);
+    if (isNaN(cap)) cap = 0;
+
+    el("pct").textContent = cap;
+
+    var offset = CIRC - (CIRC * Math.min(Math.max(cap, 0), 100) / 100);
+    var bar = el("bar");
+    bar.style.strokeDashoffset = offset;
+
+    var enabled = s.ENABLED === "1";
+    var bypass  = String(s.NODE_VAL) === "1";
+    var alive   = s.DAEMON_ALIVE === "1";
+    var supported = s.SUPPORTED === "1";
+
+    // 主状态文案
+    var st, sub, color;
+    if (!supported) {
+      st = "机型不支持"; sub = "未找到夜间充电控制节点";
+      color = "var(--red)";
+    } else if (!enabled) {
+      st = "模块已停用"; sub = "当前按系统默认方式充电";
+      color = "#8d95a3";
+    } else if (bypass) {
+      st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电";
+      color = "var(--acc)";
+    } else {
+      st = "正在充电"; sub = "电量未达停止阈值，正常充电中";
+      color = "var(--blue)";
+    }
+    el("stateTx").textContent = st;
+    el("stateTx").style.color = color;
+    el("stateSub").textContent = sub;
+    bar.style.stroke = color;
+
+    // 电流 / 温度
+    var i = parseInt(s.CURRENT, 10);
+    if (!isNaN(i)) {
+      el("mI").textContent = (i / 1000).toFixed(0) + " mA";
+      el("mI").style.color = i < 0 ? "var(--blue)" : "var(--tx)";
+    } else { el("mI").textContent = "—"; }
+
+    var t = parseInt(s.TEMP, 10);
+    el("mT").textContent = isNaN(t) ? "—" : (t / 10).toFixed(1) + " °C";
+
+    // 徽章
+    var bd = el("badge");
+    bd.className = "badge " + (!supported ? "err" : (bypass && enabled ? "on" : "off"));
+    bd.textContent = !supported ? "不支持" : (bypass && enabled ? "旁路中" : (enabled ? "已启用" : "已停用"));
+
+    // 开关
+    var sw = el("swEnable");
+    sw.checked = enabled;
+    sw.disabled = !supported || busy;
+
+    // 阈值滑块：用户动过的就不再被轮询覆盖，否则拖到一半就被弹回旧值
+    if (!dirty.t1) {
+      el("t1").value = s.ENABLE_THRESHOLD;
+      el("v1").textContent = s.ENABLE_THRESHOLD + "%";
+    }
+    if (!dirty.t2) {
+      el("t2").value = s.DISABLE_THRESHOLD;
+      el("v2").textContent = s.DISABLE_THRESHOLD + "%";
+    }
+    if (!dirty.t3) {
+      el("t3").value = s.CHECK_INTERVAL;
+      el("v3").textContent = s.CHECK_INTERVAL + " 秒";
+    }
+
+    // 底栏
+    el("nodePath").textContent = s.NODE || "";
+    el("daemonLine").textContent = alive
+      ? ("守护进程运行中 · PID " + s.DAEMON_PID)
+      : "守护进程未运行";
+    el("daemonCard").style.display = alive ? "none" : "block";
+
+    state = s;
+  }
+
+  var reqSeq = 0;
+
+  function refresh(){
+    if (busy) return;
+    var tok = ++reqSeq;
+    run("/system/bin/sh " + SH + " status")
+      .then(function(txt){
+        // 期间若已开始新请求或正在执行操作，丢弃这次结果，避免把界面回写成旧值
+        if (busy || tok !== reqSeq) return;
+        var s = parseKV(txt);
+        if (s.SUPPORTED === undefined) {
+          throw new Error("状态数据不完整，原始输出：" + String(txt || "(空)").slice(0, 240));
+        }
+        el("errbox").style.display = "none";
+        paint(s);
+      })
+      .catch(function(e){
+        el("badge").className = "badge err";
+        el("badge").textContent = "连接失败";
+        el("stateTx").textContent = "读取失败";
+        el("stateTx").style.color = "var(--red)";
+        el("stateSub").textContent = "无法与底层通信";
+        var b = el("errbox");
+        b.textContent = e.message;
+        b.style.display = "block";
+        paintBridge();
+      });
+  }
+
+  function refreshLog(){
+    run("/system/bin/sh " + SH + " log")
+      .then(function(txt){
+        var t = String(txt || "").replace(/^\s*LOG=/, "");
+        t = t.replace(/\\n/g, "\n").trim();
+        el("log").textContent = t || "(暂无日志)";
+      })
+      .catch(function(){ el("log").textContent = "(读取失败)"; });
+  }
+
+  /* ---------------- 操作 ---------------- */
+  function setKey(k, v){
+    return run("/system/bin/sh " + SH + " set " + k + " " + v).then(function(out){
+      var t = String(out || "").trim();
+      // 后端写入后会回读校验，只有真正写进去才回 OK=
+      if (t.indexOf("OK=") !== 0) throw new Error(t || "设置未生效");
+      return t;
+    });
+  }
+
+  function opMsg(text, ok){
+    var n = el("opMsg");
+    if (!text) { n.className = "opmsg"; n.textContent = ""; return; }
+    n.className = "opmsg " + (ok ? "ok" : "bad");
+    n.textContent = text;
+  }
+
+  function withBusy(fn){
+    if (busy) return;
+    busy = true;
+    opMsg("");
+    el("swEnable").disabled = true;
+    Promise.resolve()
+      .then(fn)
+      .catch(function(e){ opMsg("操作失败：" + e.message, false); })
+      .then(function(){
+        busy = false;
+        el("swEnable").disabled = false;
+        setTimeout(function(){ refresh(); refreshLog(); }, 700);
+      });
+  }
+
+  /* ---------------- 事件绑定 ---------------- */
+  el("swEnable").addEventListener("change", function(){
+    var on = this.checked;
+    var target = on;
+    withBusy(function(){
+      return setKey("ENABLED", on ? "1" : "0").then(function(){
+        opMsg(on ? "已启用旁路供电" : "已停用，恢复充电", true);
+        return waitUntil(function(s){ return (s.ENABLED === "1") === target; });
+      });
+    });
+  });
+
+  // 滑块实时显示
+  var dirty = { t1: false, t2: false, t3: false };
+
+  function bindSlider(id, labelId, fmt){
+    var s = el(id);
+    s.addEventListener("input", function(){
+      dirty[id] = true;
+      el(labelId).textContent = fmt(this.value);
+    });
+  }
+  bindSlider("t1", "v1", function(v){ return v + "%"; });
+  bindSlider("t2", "v2", function(v){ return v + "%"; });
+  bindSlider("t3", "v3", function(v){ return v + " 秒"; });
+
+  el("btnSave").addEventListener("click", function(){
+    var t1 = parseInt(el("t1").value, 10);
+    var t2 = parseInt(el("t2").value, 10);
+    var t3 = parseInt(el("t3").value, 10);
+
+    if (t2 >= t1) {
+      opMsg("未保存：恢复阈值必须低于停止阈值（当前 停止 " + t1 + "% / 恢复 " + t2 + "%）", false);
+      return;
+    }
+    if (t1 - t2 < 5) {
+      opMsg("未保存：两个阈值至少相差 5%（当前相差 " + (t1 - t2) + "%）", false);
+      return;
+    }
+
+    withBusy(function(){
+      return setKey("ENABLE_THRESHOLD", t1)
+        .then(function(){ return setKey("DISABLE_THRESHOLD", t2); })
+        .then(function(){ return setKey("CHECK_INTERVAL", t3); })
+        .then(function(){ return run("/system/bin/sh " + SH + " status"); })
+        .then(function(txt){
+          var s = parseKV(txt);
+          // 保存成功后解除"用户已修改"标记，让界面重新跟随真实值
+          dirty.t1 = dirty.t2 = dirty.t3 = false;
+          paint(s);
+          // 显示真实回读值，而不是假设保存成功
+          opMsg("已保存并回读确认：停止 " + s.ENABLE_THRESHOLD + "% / 恢复 "
+                + s.DISABLE_THRESHOLD + "% / 间隔 " + s.CHECK_INTERVAL + " 秒", true);
+        });
+    });
+  });
+
+  el("btnStart").addEventListener("click", function(){
+    withBusy(function(){
+      return run("/system/bin/sh " + SH + " start").then(function(){ toast("已启动守护进程"); });
+    });
+  });
+
+  // 等待某个状态成立（守护进程按间隔轮询，最多等 4 个周期）
+  function waitUntil(pred){
+    return new Promise(function(resolve){
+      var tries = 0;
+      var t = setInterval(function(){
+        tries++;
+        run("/system/bin/sh " + SH + " status").then(function(txt){
+          var s = parseKV(txt);
+          paint(s);
+          if (pred(s) || tries >= 8) { clearInterval(t); resolve(); }
+        }).catch(function(){ if (tries >= 8) { clearInterval(t); resolve(); } });
+      }, 2500);
+    });
+  }
+
+  /* ---------------- 启动 ---------------- */
+  if (!hasKsu()) {
+    el("errbox").style.display = "block";
+    el("errbox").textContent = "未检测到 KernelSU WebUI 接口。请用 KsuWebUI 打开本页面，直接在浏览器中访问无法控制系统。";
+  }
+
+  refresh();
+  refreshLog();
+  timer = setInterval(function(){ refresh(); }, 3000);
+  setInterval(function(){ refreshLog(); }, 12000);
+
+  document.addEventListener("visibilitychange", function(){
+    if (document.hidden) {
+      clearInterval(timer); timer = null;
+    } else if (!timer) {
+      refresh(); refreshLog();
+      timer = setInterval(function(){ refresh(); }, 3000);
+    }
+  });
+})();
+</script>
+</body>
+</html>
