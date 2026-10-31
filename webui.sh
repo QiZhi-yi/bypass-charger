@@ -118,7 +118,12 @@ set_key() {
   esac
   case "$k" in
     ENABLED) [ "$v" -gt 1 ] && { echo "ERR=bad_value"; return 1; } ;;
-    ENABLE_THRESHOLD|DISABLE_THRESHOLD) { [ "$v" -lt 1 ] || [ "$v" -gt 100 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
+    ENABLE_THRESHOLD)
+      [ "$v" -lt 1 ] || [ "$v" -gt 100 ] && { echo "ERR=out_of_range"; return 1; }
+      # 厂商夜间充电固定充到 80%，低于 80 的停止阈值实测无法生效
+      [ "$v" -lt 80 ] && { echo "ERR=below_vendor_floor:最低80"; return 1; }
+      ;;
+    DISABLE_THRESHOLD) { [ "$v" -lt 1 ] || [ "$v" -gt 100 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
     CHECK_INTERVAL) { [ "$v" -lt 5 ] || [ "$v" -gt 600 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
   esac
 

@@ -27,6 +27,8 @@ PID_FILE="$MODULE_DIR/daemon.pid"
 LOG_FILE="$MODULE_DIR/bypass.log"
 CAP_FILE="/sys/class/power_supply/battery/capacity"
 STAT_FILE="/sys/class/power_supply/battery/status"
+USB_ONLINE="/sys/class/power_supply/usb/online"
+WL_ONLINE="/sys/class/power_supply/wireless/online"
 
 lg() {
   echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG_FILE" 2>/dev/null
@@ -164,6 +166,8 @@ lg "守护进程启动 PID=$$"
 # 记录上一轮生效的阈值，用于判断配置是否被改动
 LAST_EN=""
 LAST_DI=""
+# 记录上次提示过的"低于厂商下限"的阈值，避免每轮刷日志
+LAST_WARN_EN=""
 
 while :; do
   # 模块被 KernelSU 禁用则退出
@@ -180,6 +184,22 @@ while :; do
   [ -z "$DISABLE_THRESHOLD" ] && DISABLE_THRESHOLD=75
   [ -z "$CHECK_INTERVAL" ] && CHECK_INTERVAL=15
   [ "$CHECK_INTERVAL" -lt 5 ] 2>/dev/null && CHECK_INTERVAL=5
+
+  # ---------- 厂商下限 80% ----------
+  # smart_night 不是"立刻停止充电"的开关，而是"开启厂商夜间充电模式"的开关。
+  # 开启后具体充到哪由厂商决定：固定充到 80% 才停。
+  # 实测（平板 25032RP42C、手机 25113PN0EC）：在 50%/51% 写 1 之后充电电流
+  # 仍维持 4.4A，电量继续上涨；设 70% 阈值同样一路充到 80%。
+  # 因此低于 80% 的阈值在行为上不可能生效，这里统一按 80% 执行并提示。
+  if [ "$ENABLE_THRESHOLD" -lt 80 ] 2>/dev/null; then
+    if [ "$LAST_WARN_EN" != "$ENABLE_THRESHOLD" ]; then
+      lg "停止阈值 ${ENABLE_THRESHOLD}% 低于厂商下限 80%，已按 80% 执行"
+      LAST_WARN_EN=$ENABLE_THRESHOLD
+    fi
+    ENABLE_THRESHOLD=80
+  else
+    LAST_WARN_EN=""
+  fi
 
   # 阈值纠错：恢复点必须低于停止点，否则强制留 5% 滞回
   if [ "$DISABLE_THRESHOLD" -ge "$ENABLE_THRESHOLD" ] 2>/dev/null; then
@@ -205,7 +225,27 @@ while :; do
   cur=$(cat "$CONTROL_FILE" 2>/dev/null)
   st=$(cat "$STAT_FILE" 2>/dev/null)
 
-  # 阈值被改过、或守护进程刚启动时，按当前电量重新裁决一次（不走滞回）。
+  # ---------- 未接电源时不进入旁路 ----------
+  # 拔掉充电器后必须把状态清掉，否则电量在滞回死区里掉下来时状态还留着 1，
+  # 下次插电会因为 cap 仍在死区内而"保持原状态"，导致插着电却一直不充电，
+  # 而且插着电电量不掉，永远掉不到恢复阈值，形成死锁。
+  powered=0
+  [ "$(cat "$USB_ONLINE" 2>/dev/null)" = "1" ] && powered=1
+  [ "$(cat "$WL_ONLINE" 2>/dev/null)" = "1" ] && powered=1
+
+  if [ "$powered" = "0" ]; then
+    if [ "$cur" != "0" ]; then
+      echo 0 > "$CONTROL_FILE" 2>/dev/null
+      lg "已断开电源 -> 关闭旁路标记（电量 ${cap}%）"
+    fi
+    # 清空阈值记忆，让插电瞬间按当前电量重新裁决，而不是沿用旧的滞回状态
+    LAST_EN=""
+    LAST_DI=""
+    nap
+    continue
+  fi
+
+  # 阈值被改过、或守护进程刚启动/刚插电时，按当前电量重新裁决一次（不走滞回）。
   # 否则把停止阈值调高到当前电量之上后，会一直卡在死区里不恢复充电。
   if [ "$ENABLE_THRESHOLD" != "$LAST_EN" ] || [ "$DISABLE_THRESHOLD" != "$LAST_DI" ]; then
     if [ "$cap" -ge "$ENABLE_THRESHOLD" ]; then
