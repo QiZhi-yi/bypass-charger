@@ -90,6 +90,21 @@ if [ -z "$CONTROL_FILE" ]; then
 fi
 lg "控制节点: $CONTROL_FILE"
 
+# ---------- 探测 soc_limit（优先使用）----------
+# soc_limit 在 smart_night 同级目录下，是厂商真正的"充电上限"。
+# 与 smart_night 的区别（实测）：
+#   smart_night=1 → 只是"开启夜间充电"，充到 80% 就停，低于 80% 的阈值无效
+#   soc_limit=N   → 精确上限，写 100 立刻恢复充电，写小于当前电量的值立刻停充
+# 所以有 soc_limit 的机型走它，没有的才退回 smart_night。
+SOC_LIMIT_FILE=""
+_d=$(dirname "$CONTROL_FILE")
+[ -e "$_d/soc_limit" ] && SOC_LIMIT_FILE="$_d/soc_limit"
+if [ -n "$SOC_LIMIT_FILE" ]; then
+  lg "充电上限节点: $SOC_LIMIT_FILE（精确模式）"
+else
+  lg "本机型无 soc_limit，退回夜间充电模式（阈值最低 80%）"
+fi
+
 # ---------- 单实例守卫：mkdir 原子锁 ----------
 # 扫描 /proc 匹配 cmdline 的方式在 mksh 下不可靠（还容易误杀执行它的 shell），
 # 改用 mkdir 的原子性做互斥锁：创建成功者即为唯一实例。
@@ -185,13 +200,11 @@ while :; do
   [ -z "$CHECK_INTERVAL" ] && CHECK_INTERVAL=15
   [ "$CHECK_INTERVAL" -lt 5 ] 2>/dev/null && CHECK_INTERVAL=5
 
-  # ---------- 厂商下限 80% ----------
+  # ---------- 厂商下限 80%（仅限 smart_night 模式）----------
   # smart_night 不是"立刻停止充电"的开关，而是"开启厂商夜间充电模式"的开关。
-  # 开启后具体充到哪由厂商决定：固定充到 80% 才停。
-  # 实测（平板 25032RP42C、手机 25113PN0EC）：在 50%/51% 写 1 之后充电电流
-  # 仍维持 4.4A，电量继续上涨；设 70% 阈值同样一路充到 80%。
-  # 因此低于 80% 的阈值在行为上不可能生效，这里统一按 80% 执行并提示。
-  if [ "$ENABLE_THRESHOLD" -lt 80 ] 2>/dev/null; then
+  # 开启后厂商固定充到 80% 才停，所以低于 80% 的阈值在行为上不可能生效。
+  # 有 soc_limit 的机型走精确模式，不受此限。
+  if [ -z "$SOC_LIMIT_FILE" ] && [ "$ENABLE_THRESHOLD" -lt 80 ] 2>/dev/null; then
     if [ "$LAST_WARN_EN" != "$ENABLE_THRESHOLD" ]; then
       lg "停止阈值 ${ENABLE_THRESHOLD}% 低于厂商下限 80%，已按 80% 执行"
       LAST_WARN_EN=$ENABLE_THRESHOLD
@@ -207,15 +220,6 @@ while :; do
     [ "$DISABLE_THRESHOLD" -lt 1 ] && DISABLE_THRESHOLD=1
   fi
 
-  if [ "$ENABLED" != "1" ]; then
-    [ "$(cat "$CONTROL_FILE" 2>/dev/null)" != "0" ] && {
-      echo 0 > "$CONTROL_FILE" 2>/dev/null
-      lg "模块已关闭，恢复充电"
-    }
-    nap
-    continue
-  fi
-
   cap=$(tr -cd '0-9' < "$CAP_FILE" 2>/dev/null)
   if [ -z "$cap" ]; then
     nap
@@ -224,6 +228,71 @@ while :; do
 
   cur=$(cat "$CONTROL_FILE" 2>/dev/null)
   st=$(cat "$STAT_FILE" 2>/dev/null)
+
+  # ================= 精确模式：直接控制 soc_limit =================
+  # soc_limit 是厂商真正的充电上限，实测：
+  #   写 100 且当前 90% → 立刻 2.4A 充电
+  #   写 90  且当前 94% → 5 秒内停充
+  #   写入后长时间无人改写
+  # 因此只要压住这层，任意阈值（1-100）都能精确实现。
+  if [ -n "$SOC_LIMIT_FILE" ]; then
+    # 夜间充电标记必须保持 0：一旦为 1，厂商会按它自己的 80% 上限介入，
+    # 反而把 soc_limit 抢回去。
+    [ "$cur" != "0" ] && echo 0 > "$CONTROL_FILE" 2>/dev/null
+
+    cur_limit=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
+    case "$cur_limit" in ''|*[!0-9]*) cur_limit=100 ;; esac
+
+    if [ "$ENABLED" != "1" ]; then
+      wl=100                                # 模块关闭 → 完全放开
+      LAST_EN=$ENABLE_THRESHOLD
+      LAST_DI=$DISABLE_THRESHOLD
+    elif [ "$ENABLE_THRESHOLD" != "$LAST_EN" ] || [ "$DISABLE_THRESHOLD" != "$LAST_DI" ]; then
+      # 阈值刚被改过（或守护进程刚启动）→ 按当前电量重新裁决，不走滞回
+      if [ "$cap" -ge "$ENABLE_THRESHOLD" ]; then
+        wl=$((ENABLE_THRESHOLD - 1))
+        [ "$wl" -lt 1 ] && wl=1
+      else
+        wl=100
+      fi
+      LAST_EN=$ENABLE_THRESHOLD
+      LAST_DI=$DISABLE_THRESHOLD
+    elif [ "$cap" -ge "$ENABLE_THRESHOLD" ]; then
+      wl=$((ENABLE_THRESHOLD - 1))          # 到达阈值 → 压到阈值以下即停充
+      [ "$wl" -lt 1 ] && wl=1
+    elif [ "$cap" -le "$DISABLE_THRESHOLD" ]; then
+      wl=100                                # 低于恢复阈值 → 放开充电
+    else
+      wl=$cur_limit                         # 滞回区：维持现状
+    fi
+
+    if [ "$wl" != "$cur_limit" ]; then
+      if echo "$wl" > "$SOC_LIMIT_FILE" 2>/dev/null; then
+        if [ "$ENABLED" != "1" ]; then
+          lg "模块已关闭 -> 充电上限放开为 ${wl}%（电量 ${cap}%）"
+        elif [ "$wl" = "100" ]; then
+          lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 放开充电上限"
+        else
+          lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 停充（上限 ${wl}%）"
+        fi
+      else
+        lg "写入 soc_limit 失败: $SOC_LIMIT_FILE"
+      fi
+    fi
+
+    nap
+    continue
+  fi
+
+  # ================= 兼容模式：无 soc_limit 的机型用 smart_night =================
+  if [ "$ENABLED" != "1" ]; then
+    [ "$cur" != "0" ] && {
+      echo 0 > "$CONTROL_FILE" 2>/dev/null
+      lg "模块已关闭，恢复充电"
+    }
+    nap
+    continue
+  fi
 
   # ---------- 未接电源时不进入旁路 ----------
   # 拔掉充电器后必须把状态清掉，否则电量在滞回死区里掉下来时状态还留着 1，

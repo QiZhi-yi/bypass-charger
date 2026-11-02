@@ -165,7 +165,7 @@
         <span class="sl-l">停止充电</span>
         <span class="sl-v" id="v1">80%</span>
       </div>
-      <input type="range" id="t1" min="80" max="100" step="1" value="80">
+      <input type="range" id="t1" min="20" max="100" step="1" value="80">
     </div>
 
     <div class="sl">
@@ -177,7 +177,7 @@
     </div>
 
     <div class="hint">恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>
-      停止阈值最低 <b>80%</b>：厂商的夜间充电固定充到 80% 才停，设更低不会让它更早停止。</div>
+      若本机型没有 <b>soc_limit</b> 节点，只能走厂商夜间充电模式，停止阈值最低 80%。</div>
     <div style="height:12px"></div>
     <button id="btnSave">保存阈值</button>
   </section>
@@ -575,10 +575,6 @@
     var t2 = parseInt(el("t2").value, 10);
     var t3 = parseInt(el("t3").value, 10);
 
-    if (t1 < 80) {
-      opMsg("未保存：停止阈值最低 80%。厂商的夜间充电固定充到 80% 才停，设更低不会让它更早停止。", false);
-      return;
-    }
     if (t2 >= t1) {
       opMsg("未保存：恢复阈值必须低于停止阈值（当前 停止 " + t1 + "% / 恢复 " + t2 + "%）", false);
       return;

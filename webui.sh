@@ -118,12 +118,9 @@ set_key() {
   esac
   case "$k" in
     ENABLED) [ "$v" -gt 1 ] && { echo "ERR=bad_value"; return 1; } ;;
-    ENABLE_THRESHOLD)
+    ENABLE_THRESHOLD|DISABLE_THRESHOLD)
       [ "$v" -lt 1 ] || [ "$v" -gt 100 ] && { echo "ERR=out_of_range"; return 1; }
-      # 厂商夜间充电固定充到 80%，低于 80 的停止阈值实测无法生效
-      [ "$v" -lt 80 ] && { echo "ERR=below_vendor_floor:最低80"; return 1; }
       ;;
-    DISABLE_THRESHOLD) { [ "$v" -lt 1 ] || [ "$v" -gt 100 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
     CHECK_INTERVAL) { [ "$v" -lt 5 ] || [ "$v" -gt 600 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
   esac
 
@@ -156,6 +153,10 @@ case "$1" in
     NODE=$(find_node)
     [ -z "$NODE" ] && SUP=0 || SUP=1
 
+    # 有 soc_limit 走精确模式（任意阈值），否则退回夜间充电模式（最低 80%）
+    MODE=compat
+    if [ -n "$NODE" ] && [ -e "$(dirname "$NODE")/soc_limit" ]; then MODE=precise; fi
+
     NODE_VAL=$(cat "$NODE" 2>/dev/null);      [ -z "$NODE_VAL" ] && NODE_VAL=-1
     CAP=$(cat "$CAP_FILE" 2>/dev/null);       [ -z "$CAP" ] && CAP=0
     PST=$(cat "$STAT_FILE" 2>/dev/null);      [ -z "$PST" ] && PST=unknown
@@ -173,10 +174,10 @@ case "$1" in
     [ -f "$MODULE_DIR/disable" ] && KDIS=1 || KDIS=0
 
     # 必须输出单行！KernelSU 的同步 exec 只回传一行输出
-    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s\n' \
+    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s\n' \
       "$SUP" "${NODE:-none}" "$NODE_VAL" "$CAP" "$PST" "$CUR" "$TMP" \
       "${ENABLED:-1}" "${ENABLE_THRESHOLD:-80}" "${DISABLE_THRESHOLD:-75}" \
-      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID"
+      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE"
     ;;
 
   set)
@@ -184,6 +185,11 @@ case "$1" in
     _r=$(set_key "$2" "$3")
     # 记录真实执行情况，便于排查"设置不生效"
     /system/bin/log -t bypass_webui "set $2=$3 old=$_old result=$_r uid=$(id -u 2>/dev/null)" 2>/dev/null
+    # 同时写文件：logcat 环形缓冲会被冲掉，文件不会，排查时更可靠
+    _wl="$MODULE_DIR/webui.log"
+    echo "$(date '+%m-%d %H:%M:%S') set $2=$3 old=$_old result=$_r uid=$(id -u 2>/dev/null)" >> "$_wl" 2>/dev/null
+    _n=$(wc -l < "$_wl" 2>/dev/null)
+    [ -n "$_n" ] && [ "$_n" -gt 300 ] && tail -150 "$_wl" > "$_wl.tmp" 2>/dev/null && mv "$_wl.tmp" "$_wl" 2>/dev/null
     # 通知守护进程立刻重新裁决，不必等满一个巡检周期
     _dpid=$(cat "$PID_FILE" 2>/dev/null)
     [ -n "$_dpid" ] && kill -USR1 "$_dpid" 2>/dev/null
