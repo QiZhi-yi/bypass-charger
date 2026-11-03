@@ -114,8 +114,9 @@
   <header>
     <div>
       <div class="h-title">自动旁路供电</div>
-      <div class="h-sub">v10.0 · HyperOS 4 适配</div>
+      <div class="h-sub">v10.1.1 · HyperOS 4 适配</div>
     </div>
+    <div class="badge" id="modeBadge" style="display:none;background:rgba(96,165,250,.14);color:#7fb6ff;border-color:rgba(96,165,250,.35)"></div>
     <div class="badge off" id="badge">读取中</div>
   </header>
 
@@ -419,6 +420,9 @@
       el("hint").innerHTML = (mode === "precise")
         ? '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型支持 <b>精确模式</b>，停止阈值可设 20–100%。'
         : '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型只能走厂商夜间充电（<b>兼容模式</b>），停止阈值最低 <b>80%</b>。';
+      var mb = el("modeBadge");
+      mb.textContent = (mode === "precise") ? "精确模式 · 可设 1-100%" : "兼容模式 · 可设 80-100%";
+      mb.style.display = "";
     }
 
     // 主状态文案
