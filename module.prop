@@ -1,7 +1,7 @@
 # File: module.prop
 id=bypass_charger
 name=自动旁路供电
-version=v10.1.4
-versionCode=114
+version=v10.1.5
+versionCode=115
 author=爱哭的小女孩龍
-description=利用厂商充电上限实现旁路供电，精确模式支持 1-100% 任意阈值，支持 KsuWebUI 图形控制。原作者：酷安@柳下惠77（原版 v9.9）；本版由作者适配 Android 17 / HyperOS 4 并重构。
+description=利用厂商充电机制实现旁路供电，适配 MIUI 14 ~ HyperOS 4。搭载第五代骁龙8至尊版等新平台可精确控制 1-100% 充电上限，其余机型最低 80%。支持 KsuWebUI 图形控制。原作者：酷安@柳下惠77；本版由作者重构。

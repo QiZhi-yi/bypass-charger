@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.1.4
+# KsuWebUI 后端 —— 自动旁路供电 v10.1.5
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -42,8 +42,7 @@ find_node() {
     /sys/devices/platform/*/smart_night \
     /sys/devices/platform/*/*/smart_night \
     /sys/class/power_supply/battery/night_charging \
-    /sys/class/power_supply/battery/night_charging_mode \
-    /sys/class/power_supply/battery/charge_control_end_threshold
+    /sys/class/qcom-battery/night_charging
   do
     for _f in $_p; do
       if [ -e "$_f" ]; then
@@ -54,10 +53,11 @@ find_node() {
     done
   done
 
-  # 3. 兜底全盘搜一次
-  _f=$(find /sys/devices -maxdepth 7 -name smart_night -type f 2>/dev/null | head -1)
+  # 3. 兜底全盘搜一次（smart_night 或 night_charging 两种节点名）
+  _f=$(find /sys/devices -maxdepth 8 \( -name smart_night -o -name night_charging \) -type f 2>/dev/null | head -1)
   if [ -n "$_f" ]; then
     echo "$_f" > "$NODE_CACHE" 2>/dev/null
+    chmod 644 "$NODE_CACHE" 2>/dev/null
     echo "$_f"; return 0
   fi
 
@@ -218,6 +218,9 @@ case "$1" in
     rm -rf "$MODULE_DIR/.lock" "$PID_FILE"
     NODE=$(find_node)
     [ -n "$NODE" ] && echo 0 > "$NODE" 2>/dev/null
+    # 精确模式：放开 soc_limit，避免上限残留导致不充电
+    _sd=$(dirname "$NODE" 2>/dev/null)
+    [ -n "$_sd" ] && [ -e "$_sd/soc_limit" ] && echo 100 > "$_sd/soc_limit" 2>/dev/null
     echo "OK=stopped"
     ;;
 

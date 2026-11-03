@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.1.4
+# 自动旁路供电 v10.1.5
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -60,10 +60,7 @@ find_node() {
     /sys/devices/platform/*/smart_night \
     /sys/devices/platform/*/*/smart_night \
     /sys/class/power_supply/battery/night_charging \
-    /sys/class/power_supply/battery/night_charging_mode \
-    /sys/class/power_supply/battery/charge_control_end_threshold \
-    /sys/class/qcom-battery/night_charging \
-    /sys/class/qcom-battery/night_charging_mode
+    /sys/class/qcom-battery/night_charging
   do
     for _f in $_p; do
       if [ -e "$_f" ]; then
@@ -144,6 +141,8 @@ chmod 644 "$PID_FILE" 2>/dev/null
 # 退出时确保恢复充电并释放锁
 cleanup() {
   echo 0 > "$CONTROL_FILE" 2>/dev/null
+  # 精确模式：必须同时放开 soc_limit，否则停充后上限残留，设备充不到 100%
+  [ -n "$SOC_LIMIT_FILE" ] && echo 100 > "$SOC_LIMIT_FILE" 2>/dev/null
   rm -f "$PID_FILE"
   rm -rf "$LOCK_DIR" 2>/dev/null
   lg "守护进程退出，已恢复充电"
