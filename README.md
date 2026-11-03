@@ -58,22 +58,28 @@
 
 ## 兼容性
 
-需要设备具备厂商的 `smart_charge` / `smart_night` sysfs 节点。**实测通过**：
+需要设备具备厂商的 `smart_charge` / `smart_night` / `night_charging` sysfs 节点。**实测通过**：
 
-| 设备 | 型号 | 系统 | Root 方案 | 模式 |
-|---|---|---|---|---|
-| 小米 17 | `25113PN0EC` (pudding) | Android 17 / HyperOS 4.0.5 | SukiSU Ultra 4.2.1 | **精确模式**（有 `soc_limit`） |
-| 红米 K90 Pro Max | `25102RKBEC` | Android 17 / HyperOS 3 | KernelSU | **精确模式**（有 `soc_limit`） |
-| 小米平板 7 Ultra | `25032RP42C` (jinghu) | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
-| 小米平板 6S Pro | `24018RPACC` | Android 16 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
-| Redmi K60 Pro | `22127RK46C` (socrates) | Android 15 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
-| 小米平板 6 Pro | `23046RP50C` | Android 14 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
+| 设备 | 型号 | 芯片 | 系统 | Root 方案 | 模式 |
+|---|---|---|---|---|---|
+| 小米 17 | `25113PN0EC` (pudding) | 骁龙 SM8850 | Android 17 / HyperOS 4.0.5 | SukiSU Ultra 4.2.1 | **精确模式**（有 `soc_limit`） |
+| 红米 K90 Pro Max | `25102RKBEC` | 骁龙 SM8850 | Android 17 / HyperOS 3 | KernelSU | **精确模式**（有 `soc_limit`） |
+| 小米平板 7 Ultra | `25032RP42C` (jinghu) | 小米玄戒 O1 | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
+| 小米平板 6S Pro | `24018RPACC` | 骁龙 SM8550 | Android 16 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
+| Redmi K60 Pro | `22127RK46C` (socrates) | 骁龙 SM8550 | Android 15 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
+| 小米平板 6 Pro | `23046RP50C` | 骁龙 SM8475 | Android 14 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
 
-**注意：不同机型路径层级和节点名都不一样**，模块已做自动探测，覆盖三种情况：
+**芯片与模式的关系（六台实测归纳）：**
 
-- 新平台 + `soc_limit`：`platform/.../smart_charge/smart_night` + `soc_limit`（精确模式，1–100%）
-- 新平台无 `soc_limit`：`platform/.../smart_charge/smart_night`（兼容模式，最低 80%）
-- 高通老平台：`qcom-battery/night_charging`（兼容模式，最低 80%）
+- 骁龙 **SM8850**（最新一代）→ 充电驱动提供 `soc_limit` → **精确模式（1–100%）**
+- 小米**玄戒 O1**、老骁龙 SM8475/SM8550 → 无 `soc_limit` → 兼容模式（最低 80%）
+- ⚠️ **联发科（天玑）机型尚未实测**，无法保证；需真机验证其充电节点名（见下方手动确认）
+
+不同机型的节点路径和名称都不一样，模块已自动探测：
+
+- 骁龙 SM8850：`platform/soc/soc:smart_charge/smart_night` + `soc_limit`
+- 小米玄戒 O1：`platform/smart_charge/smart_night`（无 `soc_limit`）
+- 老骁龙：`qcom-battery/night_charging`
 
 如果你的机型节点名字不一样，可以手动确认：
 
