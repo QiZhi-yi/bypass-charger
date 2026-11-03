@@ -62,14 +62,17 @@
 
 | 设备 | 型号 | 系统 | Root 方案 | 模式 |
 |---|---|---|---|---|
-| 小米平板 7 Ultra | `25032RP42C` (jinghu) | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
 | 小米 17 | `25113PN0EC` (pudding) | Android 17 / HyperOS 4.0.5 | SukiSU Ultra 4.2.1 | **精确模式**（有 `soc_limit`） |
+| 红米 K90 Pro Max | `25102RKBEC` | Android 17 / HyperOS 3 | KernelSU | **精确模式**（有 `soc_limit`） |
+| 小米平板 7 Ultra | `25032RP42C` (jinghu) | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
+| 小米平板 6 Pro | `24018RPACC` | Android 16 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
 | Redmi K60 Pro | `22127RK46C` (socrates) | Android 15 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
 
 **注意：不同机型路径层级和节点名都不一样**，模块已做自动探测，覆盖三种情况：
 
-- 新平台：`platform/.../smart_charge/smart_night`
-- 老 MIUI：`qcom-battery/night_charging`（如 K60 Pro）
+- 新平台 + `soc_limit`：`platform/.../smart_charge/smart_night` + `soc_limit`（精确模式，1–100%）
+- 新平台无 `soc_limit`：`platform/.../smart_charge/smart_night`（兼容模式，最低 80%）
+- 高通老平台：`qcom-battery/night_charging`（兼容模式，最低 80%）
 
 如果你的机型节点名字不一样，可以手动确认：
 
