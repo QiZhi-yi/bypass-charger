@@ -68,14 +68,14 @@
 | 小米 17 | `25113PN0EC` (pudding) | 第五代骁龙8至尊版（SM8850） | Android 17 / HyperOS 4.0.5 | SukiSU Ultra 4.2.1 | **精确模式**（有 `soc_limit`） |
 | 红米 K90 Pro Max | `25102RKBEC` | 第五代骁龙8至尊版（SM8850） | Android 17 / HyperOS 3 | KernelSU | **精确模式**（有 `soc_limit`） |
 | 小米平板 7 Ultra | `25032RP42C` (jinghu) | 小米玄戒 O1 | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
-| 小米平板 6S Pro | `24018RPACC` | 骁龙 SM8550 | Android 16 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
-| Redmi K60 Pro | `22127RK46C` (socrates) | 骁龙 SM8550 | Android 15 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
-| 小米平板 6 Pro | `23046RP50C` | 骁龙 SM8475 | Android 14 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
+| 小米平板 6S Pro | `24018RPACC` | 第二代骁龙8（SM8550） | Android 16 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
+| Redmi K60 Pro | `22127RK46C` (socrates) | 第二代骁龙8（SM8550） | Android 15 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
+| 小米平板 6 Pro | `23046RP50C` | 第一代骁龙8+（SM8475） | Android 14 / HyperOS 3 | KernelSU | 兼容模式（`qcom-battery/night_charging`） |
 
 **芯片与模式的关系（六台实测归纳）：**
 
 - 第五代骁龙8至尊版（SM8850）→ 充电驱动提供 `soc_limit` → **精确模式（1–100%）**
-- 小米**玄戒 O1**、老骁龙 SM8475/SM8550 → 无 `soc_limit` → 兼容模式（最低 80%）
+- 小米**玄戒 O1**、第一代骁龙8+（SM8475）、第二代骁龙8（SM8550）→ 无 `soc_limit` → 兼容模式（最低 80%）
 - ⚠️ **联发科（天玑）机型尚未实测**，无法保证；需真机验证其充电节点名（见下方手动确认）
 
 不同机型的节点路径和名称都不一样，模块已自动探测：
