@@ -67,6 +67,7 @@
 | 小米平板 7 Ultra | `25032RP42C` (jinghu) | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
 | 小米平板 6S Pro | `24018RPACC` | Android 16 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
 | Redmi K60 Pro | `22127RK46C` (socrates) | Android 15 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
+| 小米平板 6 Pro | `23046RP50C` | Android 14 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
 
 **注意：不同机型路径层级和节点名都不一样**，模块已做自动探测，覆盖三种情况：
 
