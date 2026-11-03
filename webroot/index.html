@@ -114,7 +114,7 @@
   <header>
     <div>
       <div class="h-title">自动旁路供电</div>
-      <div class="h-sub">v10.1.1 · HyperOS 4 适配</div>
+      <div class="h-sub">v<span id="verTx">--</span> · HyperOS 4 适配</div>
     </div>
     <div class="badge" id="modeBadge" style="display:none;background:rgba(96,165,250,.14);color:#7fb6ff;border-color:rgba(96,165,250,.35)"></div>
     <div class="badge off" id="badge">读取中</div>
@@ -409,6 +409,13 @@
     var alive   = s.DAEMON_ALIVE === "1";
     var supported = s.SUPPORTED === "1";
 
+    // 版本号动态显示（从 module.prop 读，避免前端硬编码漏更新）
+    var ver = String(s.VERSION || "");
+    if (ver && ver !== lastVer) {
+      lastVer = ver;
+      el("verTx").textContent = ver;
+    }
+
     // 兼容模式（机型无 soc_limit）走厂商夜间充电，阈值受 80% 上限限制。
     // 直接把滑块下限抬到 80，避免用户设了 70 却发现实际按 80 执行。
     var mode = s.MODE || "compat";
@@ -576,6 +583,8 @@
   var dirty = { t1: false, t2: false, t3: false };
   // 记录上次渲染的机型模式，避免每轮轮询都重写提示文案
   var lastMode = "";
+  // 记录版本号，避免每轮重复赋值
+  var lastVer = "";
 
   function bindSlider(id, labelId, fmt){
     var s = el(id);

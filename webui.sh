@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.1.3
+# KsuWebUI 后端 —— 自动旁路供电 v10.1.4
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -157,6 +157,10 @@ case "$1" in
     MODE=compat
     if [ -n "$NODE" ] && [ -e "$(dirname "$NODE")/soc_limit" ]; then MODE=precise; fi
 
+    # 版本号从 module.prop 动态读取，避免前端硬编码漏更新
+    VER=$(sed -n 's/^version=//p' "$MODULE_DIR/module.prop" 2>/dev/null)
+    [ -z "$VER" ] && VER="?"
+
     NODE_VAL=$(cat "$NODE" 2>/dev/null);      [ -z "$NODE_VAL" ] && NODE_VAL=-1
     CAP=$(cat "$CAP_FILE" 2>/dev/null);       [ -z "$CAP" ] && CAP=0
     PST=$(cat "$STAT_FILE" 2>/dev/null);      [ -z "$PST" ] && PST=unknown
@@ -174,10 +178,10 @@ case "$1" in
     [ -f "$MODULE_DIR/disable" ] && KDIS=1 || KDIS=0
 
     # 必须输出单行！KernelSU 的同步 exec 只回传一行输出
-    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s\n' \
+    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s;VERSION=%s\n' \
       "$SUP" "${NODE:-none}" "$NODE_VAL" "$CAP" "$PST" "$CUR" "$TMP" \
       "${ENABLED:-1}" "${ENABLE_THRESHOLD:-80}" "${DISABLE_THRESHOLD:-75}" \
-      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE"
+      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE" "$VER"
     ;;
 
   set)
