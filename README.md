@@ -64,11 +64,17 @@
 |---|---|---|---|---|
 | 小米平板 7 Ultra | `25032RP42C` (jinghu) | Android 17 / HyperOS 4.0.0.13 | KernelSU 3.3.1 | 兼容模式（无 `soc_limit`） |
 | 小米 17 | `25113PN0EC` (pudding) | Android 17 / HyperOS 4.0.5 | SukiSU Ultra 4.2.1 | **精确模式**（有 `soc_limit`） |
+| Redmi K60 Pro | `22127RK46C` (socrates) | Android 15 / HyperOS 3 | KernelSU | 兼容模式（节点 `qcom-battery/night_charging`） |
 
-**注意：不同机型路径层级不同**，模块已做自动探测；如果你的机型节点名字不一样，可以手动确认：
+**注意：不同机型路径层级和节点名都不一样**，模块已做自动探测，覆盖三种情况：
+
+- 新平台：`platform/.../smart_charge/smart_night`
+- 老 MIUI：`qcom-battery/night_charging`（如 K60 Pro）
+
+如果你的机型节点名字不一样，可以手动确认：
 
 ```bash
-su -c 'find /sys/devices -maxdepth 7 -name "smart_night"'
+su -c 'find /sys/devices -maxdepth 8 \( -name "smart_night" -o -name "night_charging" \)'
 ```
 
 只要这条命令有输出，模块基本就能用。没有输出则说明该机型没有这个功能。
@@ -395,6 +401,17 @@ adb logcat -s bypass_webui
 没有。节点只影响「插着电时是否给电池充电」，拔掉后完全由系统正常管理。
 
 ## 更新日志
+
+### v10.1.3
+
+- **兼容**：新增老 MIUI 平台节点路径 —— `qcom-battery/night_charging`（Redmi K60 Pro 实测）。
+  此前模块只认 `smart_night`，导致 HyperOS 3 及更早机型装完报「未找到控制节点」。
+- **改进**：节点探测的兜底 `find` 现在同时匹配 `smart_night` 和 `night_charging` 两种节点名。
+
+### v10.1.2
+
+- **新增**：安装时（`customize.sh`）自动探测机型模式并打印到安装日志，装完即知精确/兼容模式。
+- **新增**：WebUI 头部显示模式徽章与可设范围（`精确模式·可设 1-100%` / `兼容模式·可设 80-100%`）。
 
 ### v10.1.1
 

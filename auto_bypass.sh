@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.1.2
+# 自动旁路供电 v10.1.3
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -61,7 +61,9 @@ find_node() {
     /sys/devices/platform/*/*/smart_night \
     /sys/class/power_supply/battery/night_charging \
     /sys/class/power_supply/battery/night_charging_mode \
-    /sys/class/power_supply/battery/charge_control_end_threshold
+    /sys/class/power_supply/battery/charge_control_end_threshold \
+    /sys/class/qcom-battery/night_charging \
+    /sys/class/qcom-battery/night_charging_mode
   do
     for _f in $_p; do
       if [ -e "$_f" ]; then
@@ -72,8 +74,9 @@ find_node() {
     done
   done
 
-  # 3. 兜底：全盘搜一次（较慢，仅在前两步都失败时执行）
-  _f=$(find /sys/devices -maxdepth 7 -name smart_night -type f 2>/dev/null | head -1)
+  # 3. 兜底：全盘搜一次（较慢，仅在前两步都失败时执行）。
+  #    不同机型节点名不同：smart_night（新）或 night_charging（旧，如 Redmi K60 Pro）
+  _f=$(find /sys/devices -maxdepth 8 \( -name smart_night -o -name night_charging \) -type f 2>/dev/null | head -1)
   if [ -n "$_f" ]; then
     echo "$_f" > "$NODE_CACHE" 2>/dev/null
     chmod 644 "$NODE_CACHE" 2>/dev/null

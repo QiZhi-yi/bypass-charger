@@ -25,7 +25,19 @@ done
 _print "──────────────────────────────"
 _print "自动旁路供电 · 机型适配检测"
 
-NODE=$(find /sys/devices -maxdepth 8 -name smart_night -type f 2>/dev/null | head -1)
+NODE=""
+for _p in \
+  /sys/devices/platform/smart_charge/smart_night \
+  /sys/devices/platform/*/smart_night \
+  /sys/devices/platform/*/*/smart_night \
+  /sys/class/power_supply/battery/night_charging \
+  /sys/class/qcom-battery/night_charging
+do
+  for _f in $_p; do
+    [ -e "$_f" ] && { NODE="$_f"; break 2; }
+  done
+done
+[ -z "$NODE" ] && NODE=$(find /sys/devices -maxdepth 8 \( -name smart_night -o -name night_charging \) -type f 2>/dev/null | head -1)
 
 if [ -z "$NODE" ]; then
   _print "✗ 未找到 smart_night 节点，本机型可能不支持"
