@@ -176,8 +176,7 @@
       <input type="range" id="t2" min="10" max="99" step="1" value="75">
     </div>
 
-    <div class="hint">恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>
-      若本机型没有 <b>soc_limit</b> 节点，只能走厂商夜间充电模式，停止阈值最低 80%。</div>
+    <div class="hint" id="hint">恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。</div>
     <div style="height:12px"></div>
     <button id="btnSave">保存阈值</button>
   </section>
@@ -409,6 +408,19 @@
     var alive   = s.DAEMON_ALIVE === "1";
     var supported = s.SUPPORTED === "1";
 
+    // 兼容模式（机型无 soc_limit）走厂商夜间充电，阈值受 80% 上限限制。
+    // 直接把滑块下限抬到 80，避免用户设了 70 却发现实际按 80 执行。
+    var mode = s.MODE || "compat";
+    if (mode !== lastMode) {
+      lastMode = mode;
+      var floor = (mode === "precise") ? 20 : 80;
+      el("t1").min = floor;
+      if (parseInt(el("t1").value, 10) < floor) el("t1").value = floor;
+      el("hint").innerHTML = (mode === "precise")
+        ? '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型支持 <b>精确模式</b>，停止阈值可设 20–100%。'
+        : '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型只能走厂商夜间充电（<b>兼容模式</b>），停止阈值最低 <b>80%</b>。';
+    }
+
     // 主状态文案
     var st, sub, color;
     if (!supported) {
@@ -558,6 +570,8 @@
 
   // 滑块实时显示
   var dirty = { t1: false, t2: false, t3: false };
+  // 记录上次渲染的机型模式，避免每轮轮询都重写提示文案
+  var lastMode = "";
 
   function bindSlider(id, labelId, fmt){
     var s = el(id);

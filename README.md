@@ -193,8 +193,13 @@ current_now     -101000 µA → +33000 µA   # 由流入电池变为停止
 | 节点 | 可写 | 有效 | 说明 |
 |---|---|---|---|
 | `battery/charge_control_limit` | 是 | ❌ | 哑属性。写 16 命令成功，回读恒为 0 |
+| `battery/charge_control_limit_max` | — | — | 值是 16，不是百分比，说明这是厂商的哑实现 |
 | `smart_charge/smart_ichg` | 是 | ❌ | 值能存（写 100 回读 100），但充电电流纹丝不动 |
 | `smart_charge/batt_safe_lvl` | 是 | ❌ | 写 75 回读 0，直接被拒 |
+| `platform/soc_limit/`（平板） | — | ❌ | 只是个未绑定的空设备（`waiting_for_supplier`），无可用属性 |
+
+所以只有带 `soc_limit` 文件的机型才能进精确模式；平板上并不存在这个文件，
+`/sys/devices/platform/soc_limit` 那个同名目录是干扰项，不是控制点。
 
 `smart_night` 在夜间充电被激活时，守值是厂商 HAL 服务
 **`vendor.xiaomi.hardware.batteryantiaging-service`**。所以精确模式要避开它 ——
@@ -390,6 +395,13 @@ adb logcat -s bypass_webui
 没有。节点只影响「插着电时是否给电池充电」，拔掉后完全由系统正常管理。
 
 ## 更新日志
+
+### v10.1.1
+
+- **改进**：WebUI 根据机型模式自动调整阈值滑块下限 —— 兼容模式直接限制为 80%，
+  不再让人设了 70% 却发现实际按 80% 执行。提示文案也会说明当前模式。
+- **修正**：脚本头部版本号与 `module.prop` 不一致。
+- **修正**：`customize.sh` 缺失（不影响运行，仅安装时使用）。
 
 ### v10.1.0
 
