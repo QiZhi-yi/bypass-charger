@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.2.0
+# 自动旁路供电 v10.2.1
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -30,11 +30,17 @@ STAT_FILE="/sys/class/power_supply/battery/status"
 USB_ONLINE="/sys/class/power_supply/usb/online"
 WL_ONLINE="/sys/class/power_supply/wireless/online"
 
-lg() {
-  echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG_FILE" 2>/dev/null
+# 日志分级：lg=信息 / lgw=警告 / lge=错误
+lg()  { _lg I "$@"; }
+lgw() { _lg W "$@"; }
+lge() { _lg E "$@"; }
+
+_lg() {
+  _lvl=$1; shift
+  echo "$(date '+%m-%d %H:%M:%S') [$_lvl] $*" >> "$LOG_FILE" 2>/dev/null
   # 必须用绝对路径，否则会递归调用本函数自身
-  /system/bin/log -t bypass_charger "$*" 2>/dev/null
-  # 日志超过 200 行自动截断
+  /system/bin/log -t bypass_charger "[$_lvl] $*" 2>/dev/null
+  # 日志超过 200 行自动截断，保留最后 100 行
   if [ -f "$LOG_FILE" ]; then
     n=$(wc -l < "$LOG_FILE" 2>/dev/null)
     [ -n "$n" ] && [ "$n" -gt 200 ] && tail -100 "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null
@@ -85,7 +91,7 @@ find_node() {
 
 CONTROL_FILE=$(find_node)
 if [ -z "$CONTROL_FILE" ]; then
-  lg "致命错误: 未找到夜间充电控制节点，本机型可能不支持"
+  lge "致命错误: 未找到夜间充电控制节点，本机型可能不支持"
   exit 1
 fi
 lg "控制节点: $CONTROL_FILE"
@@ -102,7 +108,7 @@ _d=$(dirname "$CONTROL_FILE")
 if [ -n "$SOC_LIMIT_FILE" ]; then
   lg "充电上限节点: $SOC_LIMIT_FILE（精确模式）"
 else
-  lg "本机型无 soc_limit，退回夜间充电模式（阈值最低 80%）"
+  lgw "本机型无 soc_limit，退回夜间充电模式（阈值最低 80%）"
 fi
 
 # ---------- 单实例守卫：mkdir 原子锁 ----------
@@ -189,7 +195,7 @@ LAST_WARN_EN=""
 while :; do
   # 模块被 KernelSU 禁用则退出
   if [ -f "$MODULE_DIR/disable" ]; then
-    lg "检测到 disable 标记，退出"
+    lgw "检测到 disable 标记，退出"
     break
   fi
 
@@ -208,7 +214,7 @@ while :; do
   # 有 soc_limit 的机型走精确模式，不受此限。
   if [ -z "$SOC_LIMIT_FILE" ] && [ "$ENABLE_THRESHOLD" -lt 80 ] 2>/dev/null; then
     if [ "$LAST_WARN_EN" != "$ENABLE_THRESHOLD" ]; then
-      lg "停止阈值 ${ENABLE_THRESHOLD}% 低于厂商下限 80%，已按 80% 执行"
+      lgw "停止阈值 ${ENABLE_THRESHOLD}% 低于厂商下限 80%，已按 80% 执行"
       LAST_WARN_EN=$ENABLE_THRESHOLD
     fi
     ENABLE_THRESHOLD=80
@@ -278,7 +284,7 @@ while :; do
           lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 停充（上限 ${wl}%）"
         fi
       else
-        lg "写入 soc_limit 失败: $SOC_LIMIT_FILE"
+        lge "写入 soc_limit 失败: $SOC_LIMIT_FILE"
       fi
     fi
 
@@ -342,7 +348,7 @@ while :; do
         lg "电量 ${cap}%（停止 ${ENABLE_THRESHOLD}% / 恢复 ${DISABLE_THRESHOLD}%）-> 恢复充电 [$st]"
       fi
     else
-      lg "写入失败: $CONTROL_FILE"
+      lge "写入失败: $CONTROL_FILE"
     fi
   fi
 

@@ -5,6 +5,14 @@ _print() {
   if type ui_print >/dev/null 2>&1; then ui_print "$@"; else echo "$@"; fi
 }
 
+# ---------- 打印模块与作者信息 ----------
+_print "──────────────────────────────"
+_print "  自动旁路供电"
+_print "  作者：爱哭的小女孩龍（酷安）"
+_print "  原作者：酷安@柳下惠77（原版 v9.9）"
+_print "  项目：github.com/QiZhi-yi/bypass-charger"
+_print "──────────────────────────────"
+
 set_perm_recursive() {
   chown -R $2:$3 $1 2>/dev/null
   chmod -R $4 $1 2>/dev/null
