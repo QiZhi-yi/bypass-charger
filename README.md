@@ -58,6 +58,9 @@
 | **单实例保证** | `mkdir` 原子锁，不会出现重复守护进程 |
 | **写入校验** | 每次写配置都回读确认，失败明确报错而非静默失败 |
 | **开机自启** | 等待系统就绪后自动拉起守护进程 |
+| **在线更新** | 接入 `updateJson`，管理器内直接检测并安装 GitHub 新版 |
+| **配置保留** | 更新模块时自动保留你设置过的阈值，无配置用默认 |
+| **卸载还原** | 卸载时还原充电节点原始值 + 原始权限 |
 
 ## 兼容性
 
@@ -333,26 +336,32 @@ void   exec(String cmd, String cbName);
 ## 目录结构
 
 ```
-bypass_charger/
-├── module.prop                       模块信息（管理器显示用）
-├── customize.sh                      安装脚本（设置文件权限）
+bypass_charger/                         模块源码（仓库）
+├── module.prop                       模块信息（含 updateJson 在线更新地址）
+├── customize.sh                      安装脚本（权限 / 机型探测 / 配置保留 / 记录原值）
 ├── service.sh                        开机启动器
 ├── auto_bypass.sh                    守护进程（核心逻辑）
+├── uninstall.sh                      卸载清理（还原节点原值+原权限）
 ├── webui.sh                          KsuWebUI 后端
 ├── webroot/
 │   └── index.html                    KsuWebUI 前端界面
 ├── META-INF/com/google/android/      安装器（Magisk 兼容）
 │   ├── update-binary
 │   └── updater-script
+├── update.json                       在线更新清单（管理器拉取）
+├── CHANGELOG.md                      更新日志（管理器显示）
 └── build_zip.py                      打包脚本
 
 安装后运行时生成的：
 /data/adb/modules/bypass_charger/
 ├── config.sh                         用户配置
-├── bypass.log                        运行日志（自动截断保留 100 行）
+├── bypass.log                        运行日志（自动截断保留 200 行）
 ├── daemon.pid                        守护进程 PID
 ├── node.path                         探测到的控制节点路径（缓存）
 └── .lock/                            单实例锁目录
+
+/data/adb/bypass_charger/
+└── orig.env                          节点原始值+权限（卸载时还原用）
 ```
 
 ## 常见问题
