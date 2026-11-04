@@ -14,7 +14,7 @@ set_perm_recursive() {
 set_perm_recursive $MODPATH 0 0 0755
 
 # 可执行脚本
-for f in auto_bypass.sh service.sh webui.sh; do
+for f in auto_bypass.sh service.sh webui.sh uninstall.sh; do
   [ -f "$MODPATH/$f" ] && chmod 0755 "$MODPATH/$f"
 done
 
@@ -53,4 +53,32 @@ else
     _print "  充电阈值最低 80%（厂商夜间充电上限）"
   fi
 fi
+
+# ---------- 保存节点原始值/权限，供卸载时还原 ----------
+# 只在首次安装时记录一次（更新时已存在则跳过），确保记录的是系统出厂默认值，
+# 而不是模块自己写进去的值。
+DATA_DIR=/data/adb/bypass_charger
+ORIG_ENV="$DATA_DIR/orig.env"
+if [ -n "$NODE" ] && [ ! -f "$ORIG_ENV" ]; then
+  mkdir -p "$DATA_DIR" 2>/dev/null
+  _val=$(cat "$NODE" 2>/dev/null)
+  _mode=$(stat -c '%a' "$NODE" 2>/dev/null)
+  [ -z "$_val" ] && _val=0
+  [ -z "$_mode" ] && _mode=644
+  printf 'ORIG_NODE=%s\nORIG_NIGHT_VAL=%s\nORIG_NIGHT_MODE=%s\n' "$NODE" "$_val" "$_mode" > "$ORIG_ENV" 2>/dev/null
+  _print "✓ 已记录节点原始值 $_val（权限 $_mode），卸载时自动还原"
+fi
+
+# ---------- 更新时保留用户自定义阈值 ----------
+# 管理器更新模块会整体替换模块目录，导致 config.sh 被清空。
+# 这里在更新（旧模块目录仍存在）时把旧配置复制到新模块目录，实现「保留阈值」。
+OLD_CONF="/data/adb/modules/bypass_charger/config.sh"
+if [ -f "$OLD_CONF" ] && [ "$OLD_CONF" != "$MODPATH/config.sh" ]; then
+  cp "$OLD_CONF" "$MODPATH/config.sh" 2>/dev/null
+  chmod 666 "$MODPATH/config.sh" 2>/dev/null
+  _print "✓ 已保留你之前的阈值配置"
+else
+  _print "✓ 首次安装，将使用默认阈值（80% 停 / 75% 恢复）"
+fi
+
 _print "──────────────────────────────"

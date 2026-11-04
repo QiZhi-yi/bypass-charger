@@ -105,11 +105,19 @@ su -c 'ls /sys/devices/platform/*/smart_charge/ /sys/devices/platform/*/*/smart_
 
 ## 安装
 
-1. 下载 Release 中的 `bypass-charger-v10.1.0.zip`
+1. 下载 Release 中的 `bypass-charger-v*.zip`
 2. 打开 KernelSU / Magisk 管理器 → **模块** → **从本地安装**
 3. 选择 zip → 安装完成 → **重启设备**
 
 重启后模块会自动启动，默认在 **80% 停止充电 / 75% 恢复充电**。
+
+### 在线更新
+
+模块已接入 `updateJson` 机制，在 KernelSU / Magisk / APatch 管理器里：
+
+- 进入「模块」页，下拉刷新即可检测到 GitHub 上的新版
+- 点「更新」会自动下载并安装，**你之前设置过的阈值会被自动保留**（无配置则用默认值）
+- 卸载模块时会自动还原充电节点的原始值和权限
 
 ## 使用
 
@@ -415,6 +423,22 @@ adb logcat -s bypass_webui
 
 ## 更新日志
 
+### v10.2.0
+
+- **新增**：KernelSU / Magisk / APatch 管理器内**在线更新**（`updateJson` 机制），
+  在管理器里点刷新即可检测并安装新版。
+- **新增**：更新模块时**自动保留你设置过的阈值**，无配置则用默认值。
+- **新增**：卸载时**还原充电节点原始值 + 原始权限**（记录于 `/data/adb/bypass_charger/orig.env`）。
+
+### v10.1.7
+
+- **修复**：WebUI 状态误显示「正在充电」—— 改为以内核真实充电状态 `CHARGE_STATUS` 为准，
+  未插电正确显示「未充电」。
+
+### v10.1.6
+
+- **文档**：处理器名称统一为「中文名 + 代号」。
+
 ### v10.1.5
 
 - **修复**：精确模式下禁用/停止模块时，`soc_limit` 未放开为 100，导致停充后上限残留、
@@ -424,6 +448,10 @@ adb logcat -s bypass_webui
 - **清理**：移除探测列表里语义不符的投机节点 `charge_control_end_threshold`（百分比语义）与
   `night_charging_mode`（语义未知），避免被命中时写错值。
 - **说明**：适配范围明确为 **MIUI 14 ~ HyperOS 4**；1–100% 精确控制需新平台（第五代骁龙8至尊版等）。
+
+### v10.1.4
+
+- **修复**：WebUI 版本号改为从 `module.prop` 动态读取，不再硬编码漏更新。
 
 ### v10.1.3
 
