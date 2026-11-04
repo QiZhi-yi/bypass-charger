@@ -432,8 +432,11 @@
       mb.style.display = "";
     }
 
-    // 主状态文案
+    // 主状态文案：以内核真实充电状态 CHARGE_STATUS 为准，而不是只猜节点值。
+    // 之前只按 NODE_VAL 判断，导致「没插电」也被显示成「正在充电」。
     var st, sub, color;
+    var cst = String(s.CHARGE_STATUS || "").toLowerCase();
+    var cur = parseInt(s.CURRENT, 10);
     if (!supported) {
       st = "机型不支持"; sub = "未找到夜间充电控制节点";
       color = "var(--red)";
@@ -443,6 +446,24 @@
     } else if (bypass) {
       st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电";
       color = "var(--acc)";
+    } else if (cst === "discharging") {
+      st = "未充电"; sub = "未连接充电器，电池放电中";
+      color = "#8d95a3";
+    } else if (cst === "full") {
+      st = "已充满"; sub = "电池已充满，设备由适配器供电";
+      color = "var(--acc)";
+    } else if (cst === "not charging" || cst === "notcharging") {
+      st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电";
+      color = "var(--acc)";
+    } else if (cst === "charging") {
+      // 插着电但电流接近 0 = 旁路（精确模式没有 node 标记，只能靠电流判断）
+      if (!isNaN(cur) && cur >= -20000 && cur <= 20000) {
+        st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电";
+        color = "var(--acc)";
+      } else {
+        st = "正在充电"; sub = "电量未达停止阈值，正常充电中";
+        color = "var(--blue)";
+      }
     } else {
       st = "正在充电"; sub = "电量未达停止阈值，正常充电中";
       color = "var(--blue)";
