@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.2.1
+# 自动旁路供电 v10.3.0
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -167,6 +167,19 @@ nap() {
   SLEEP_PID=""
 }
 
+# ---------- 定时窗口判断（HH:MM 字符串比较，支持跨午夜）----------
+in_schedule() {
+  _now=$(date '+%H:%M')
+  if [ "$SCHEDULE_START" \< "$SCHEDULE_END" ]; then
+    # 不跨天（如 08:00~20:00）：now < start 或 now > end 即不在窗口内
+    { [ "$_now" \< "$SCHEDULE_START" ] || [ "$_now" \> "$SCHEDULE_END" ]; } && return 1
+  else
+    # 跨天（如 23:00~07:00）：start < now < end 的区间才是不在窗口内
+    [ "$_now" \< "$SCHEDULE_START" ] && [ "$_now" \> "$SCHEDULE_END" ] && return 1
+  fi
+  return 0
+}
+
 # ---------- 首次生成默认配置 ----------
 if [ ! -f "$CONF_FILE" ]; then
   cat > "$CONF_FILE" <<-EOF
@@ -179,6 +192,11 @@ ENABLE_THRESHOLD=80
 DISABLE_THRESHOLD=75
 # 巡检间隔（秒）
 CHECK_INTERVAL=15
+# 定时旁路：1=仅在下面时间段内启用，0=全天启用
+SCHEDULE_ENABLED=0
+# 定时开始/结束时间（HH:MM，跨午夜用开始>结束表示）
+SCHEDULE_START=23:00
+SCHEDULE_END=07:00
 EOF
   chmod 644 "$CONF_FILE"
 fi
@@ -207,6 +225,14 @@ while :; do
   [ -z "$DISABLE_THRESHOLD" ] && DISABLE_THRESHOLD=75
   [ -z "$CHECK_INTERVAL" ] && CHECK_INTERVAL=15
   [ "$CHECK_INTERVAL" -lt 5 ] 2>/dev/null && CHECK_INTERVAL=5
+  [ -z "$SCHEDULE_ENABLED" ] && SCHEDULE_ENABLED=0
+  [ -z "$SCHEDULE_START" ] && SCHEDULE_START="23:00"
+  [ -z "$SCHEDULE_END" ] && SCHEDULE_END="07:00"
+
+  # ---------- 定时旁路：开启时，窗口外视为关闭（临时把 ENABLED 置 0）----------
+  if [ "$SCHEDULE_ENABLED" = "1" ] && ! in_schedule; then
+    ENABLED=0
+  fi
 
   # ---------- 厂商下限 80%（仅限 smart_night 模式）----------
   # smart_night 不是"立刻停止充电"的开关，而是"开启厂商夜间充电模式"的开关。

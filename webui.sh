@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.2.1
+# KsuWebUI 后端 —— 自动旁路供电 v10.3.0
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -71,6 +71,9 @@ ENABLED=1
 ENABLE_THRESHOLD=80
 DISABLE_THRESHOLD=75
 CHECK_INTERVAL=15
+SCHEDULE_ENABLED=0
+SCHEDULE_START=23:00
+SCHEDULE_END=07:00
 EOF
   # 666：WebUI 的执行身份未必是 root，放开写权限让配置文件能被改
   chmod 666 "$CONF_FILE" 2>/dev/null
@@ -109,15 +112,25 @@ set_key() {
   [ -z "$k" ] && { echo "ERR=no_key"; return 1; }
   # 仅允许已知键
   case "$k" in
-    ENABLED|ENABLE_THRESHOLD|DISABLE_THRESHOLD|CHECK_INTERVAL) ;;
+    ENABLED|ENABLE_THRESHOLD|DISABLE_THRESHOLD|CHECK_INTERVAL|SCHEDULE_ENABLED|SCHEDULE_START|SCHEDULE_END) ;;
     *) echo "ERR=unknown_key"; return 1 ;;
   esac
-  # 数值校验
-  case "$v" in
-    ''|*[!0-9]*) echo "ERR=bad_value"; return 1 ;;
+  # 时间类型（HH:MM）与数值类型分别校验
+  case "$k" in
+    SCHEDULE_START|SCHEDULE_END)
+      case "$v" in
+        [0-2][0-9]:[0-5][0-9]) ;;
+        *) echo "ERR=bad_time"; return 1 ;;
+      esac
+      ;;
+    *)
+      case "$v" in
+        ''|*[!0-9]*) echo "ERR=bad_value"; return 1 ;;
+      esac
+      ;;
   esac
   case "$k" in
-    ENABLED) [ "$v" -gt 1 ] && { echo "ERR=bad_value"; return 1; } ;;
+    ENABLED|SCHEDULE_ENABLED) [ "$v" -gt 1 ] && { echo "ERR=bad_value"; return 1; } ;;
     ENABLE_THRESHOLD|DISABLE_THRESHOLD)
       [ "$v" -lt 1 ] || [ "$v" -gt 100 ] && { echo "ERR=out_of_range"; return 1; }
       ;;
@@ -177,11 +190,32 @@ case "$1" in
 
     [ -f "$MODULE_DIR/disable" ] && KDIS=1 || KDIS=0
 
+    # 定时：判断当前是否在窗口内
+    [ -z "$SCHEDULE_ENABLED" ] && SCHEDULE_ENABLED=0
+    [ -z "$SCHEDULE_START" ] && SCHEDULE_START="23:00"
+    [ -z "$SCHEDULE_END" ] && SCHEDULE_END="07:00"
+    SCHED_ACTIVE=0
+    if [ "$SCHEDULE_ENABLED" = "1" ]; then
+      _now=$(date '+%H:%M')
+      if [ "$SCHEDULE_START" \< "$SCHEDULE_END" ]; then
+        { [ "$_now" \< "$SCHEDULE_START" ] || [ "$_now" \> "$SCHEDULE_END" ]; } || SCHED_ACTIVE=1
+      else
+        { [ "$_now" \< "$SCHEDULE_START" ] && [ "$_now" \> "$SCHEDULE_END" ]; } || SCHED_ACTIVE=1
+      fi
+    fi
+
+    # 有效启用状态：主开关 AND（定时关 或 在窗口内）
+    EFF_ENABLED=${ENABLED:-1}
+    if [ "$SCHEDULE_ENABLED" = "1" ] && [ "$SCHED_ACTIVE" = "0" ]; then
+      EFF_ENABLED=0
+    fi
+
     # 必须输出单行！KernelSU 的同步 exec 只回传一行输出
-    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s;VERSION=%s\n' \
+    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;EFF_ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s;VERSION=%s;SCHEDULE_ENABLED=%s;SCHEDULE_START=%s;SCHEDULE_END=%s;SCHEDULE_ACTIVE=%s\n' \
       "$SUP" "${NODE:-none}" "$NODE_VAL" "$CAP" "$PST" "$CUR" "$TMP" \
-      "${ENABLED:-1}" "${ENABLE_THRESHOLD:-80}" "${DISABLE_THRESHOLD:-75}" \
-      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE" "$VER"
+      "${ENABLED:-1}" "$EFF_ENABLED" "${ENABLE_THRESHOLD:-80}" "${DISABLE_THRESHOLD:-75}" \
+      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE" "$VER" \
+      "$SCHEDULE_ENABLED" "$SCHEDULE_START" "$SCHEDULE_END" "$SCHED_ACTIVE"
     ;;
 
   set)
