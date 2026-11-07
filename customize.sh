@@ -77,14 +77,18 @@ if [ -n "$NODE" ] && [ ! -f "$ORIG_ENV" ]; then
   _print "✓ 已记录节点原始值 $_val（权限 $_mode），卸载时自动还原"
 fi
 
-# ---------- 更新时保留用户自定义阈值 ----------
-# 管理器更新模块会整体替换模块目录，导致 config.sh 被清空。
-# 这里在更新（旧模块目录仍存在）时把旧配置复制到新模块目录，实现「保留阈值」。
+# ---------- 配置迁移到模块目录外（更新时不会被清空）----------
+# 配置统一放在 /data/adb/bypass_charger/config.sh。管理器更新只替换模块目录，
+# 不会碰这里，所以阈值、定时等设置都能完整保留。
+CONF_DIR="/data/adb/bypass_charger"
 OLD_CONF="/data/adb/modules/bypass_charger/config.sh"
-if [ -f "$OLD_CONF" ] && [ "$OLD_CONF" != "$MODPATH/config.sh" ]; then
-  cp "$OLD_CONF" "$MODPATH/config.sh" 2>/dev/null
-  chmod 666 "$MODPATH/config.sh" 2>/dev/null
-  _print "✓ 已保留你之前的阈值配置"
+if [ ! -f "$CONF_DIR/config.sh" ] && [ -f "$OLD_CONF" ]; then
+  mkdir -p "$CONF_DIR" 2>/dev/null
+  cp "$OLD_CONF" "$CONF_DIR/config.sh" 2>/dev/null
+  chmod 666 "$CONF_DIR/config.sh" 2>/dev/null
+  _print "✓ 已迁移并保留你之前的阈值/定时配置"
+elif [ -f "$CONF_DIR/config.sh" ]; then
+  _print "✓ 已保留现有配置（更新不影响）"
 else
   _print "✓ 首次安装，将使用默认阈值（80% 停 / 75% 恢复）"
 fi

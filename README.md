@@ -143,7 +143,7 @@ KernelSU 管理器 → 模块 → **自动旁路供电** → 打开 **WebUI**
 不想用界面也可以直接编辑：
 
 ```bash
-su -c 'vi /data/adb/modules/bypass_charger/config.sh'
+su -c 'vi /data/adb/bypass_charger/config.sh'
 ```
 
 修改后**立即生效**（守护进程会收到信号重新裁决），无需重启。
@@ -318,7 +318,7 @@ void   exec(String cmd, String cbName);
 
 ## 参数说明
 
-配置文件：`/data/adb/modules/bypass_charger/config.sh`
+配置文件：`/data/adb/bypass_charger/config.sh`
 
 | 参数 | 默认 | 范围 | 说明 |
 |---|---|---|---|
@@ -326,6 +326,9 @@ void   exec(String cmd, String cbName);
 | `ENABLE_THRESHOLD` | `80` | 1–100 | 停止充电阈值。电量 ≥ 此值 → 暂停充电。精确模式全范围有效；兼容模式低于 80 会按 80 执行 |
 | `DISABLE_THRESHOLD` | `75` | 1–100 | 恢复充电阈值。电量 ≤ 此值 → 恢复充电 |
 | `CHECK_INTERVAL` | `15` | 5–600 | 电量巡检间隔（秒）。**改配置不受此限制，恒为即时生效** |
+| `SCHEDULE_ENABLED` | `0` | 0 / 1 | 定时旁路开关。1 = 仅在下方时间段内启用旁路 |
+| `SCHEDULE_START` | `23:00` | HH:MM | 定时开始时间 |
+| `SCHEDULE_END` | `07:00` | HH:MM | 定时结束时间（跨午夜用开始 > 结束表示） |
 
 约束：`DISABLE_THRESHOLD` 必须**低于** `ENABLE_THRESHOLD`，且至少相差 5%。
 不满足时后端会自动把恢复阈值压到「停止阈值 − 5」。
@@ -354,13 +357,13 @@ bypass_charger/                         模块源码（仓库）
 
 安装后运行时生成的：
 /data/adb/modules/bypass_charger/
-├── config.sh                         用户配置
 ├── bypass.log                        运行日志（自动截断保留 200 行）
 ├── daemon.pid                        守护进程 PID
 ├── node.path                         探测到的控制节点路径（缓存）
 └── .lock/                            单实例锁目录
 
-/data/adb/bypass_charger/
+/data/adb/bypass_charger/              持久数据（更新模块不会被清空）
+├── config.sh                         用户配置（阈值 / 定时）
 └── orig.env                          节点原始值+权限（卸载时还原用）
 ```
 
@@ -431,6 +434,12 @@ adb logcat -s bypass_webui
 没有。节点只影响「插着电时是否给电池充电」，拔掉后完全由系统正常管理。
 
 ## 更新日志
+
+### v10.3.1
+
+- **修复**：配置改存到模块目录外 `/data/adb/bypass_charger/config.sh`。旧版依赖
+  `customize.sh` 在更新时复制配置，受管理器更新时序影响，更新后阈值/定时可能丢失。
+  现在配置在模块目录外，更新模块不再触碰，阈值和定时稳定保留。
 
 ### v10.3.0
 

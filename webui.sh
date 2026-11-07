@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.3.0
+# KsuWebUI 后端 —— 自动旁路供电 v10.3.1
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -17,7 +17,8 @@
 # ============================================================
 
 MODULE_DIR="/data/adb/modules/bypass_charger"
-CONF_FILE="$MODULE_DIR/config.sh"
+# 配置放在模块目录外，更新模块时不会被清空
+CONF_FILE="/data/adb/bypass_charger/config.sh"
 PID_FILE="$MODULE_DIR/daemon.pid"
 LOG_FILE="$MODULE_DIR/bypass.log"
 CAP_FILE="/sys/class/power_supply/battery/capacity"
@@ -66,6 +67,14 @@ find_node() {
 
 ensure_conf() {
   [ -f "$CONF_FILE" ] && return
+  mkdir -p "/data/adb/bypass_charger" 2>/dev/null
+  # 迁移旧版：旧配置在模块目录内
+  _OLD_CONF="$MODULE_DIR/config.sh"
+  if [ -f "$_OLD_CONF" ]; then
+    cp "$_OLD_CONF" "$CONF_FILE" 2>/dev/null
+    chmod 666 "$CONF_FILE" 2>/dev/null
+    return
+  fi
   cat > "$CONF_FILE" <<-EOF
 ENABLED=1
 ENABLE_THRESHOLD=80

@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.3.0
+# 自动旁路供电 v10.3.1
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -22,7 +22,8 @@
 # ============================================================
 
 MODULE_DIR="/data/adb/modules/bypass_charger"
-CONF_FILE="$MODULE_DIR/config.sh"
+# 配置放在模块目录外，更新模块时不会被清空（阈值/定时都能保留）
+CONF_FILE="/data/adb/bypass_charger/config.sh"
 PID_FILE="$MODULE_DIR/daemon.pid"
 LOG_FILE="$MODULE_DIR/bypass.log"
 CAP_FILE="/sys/class/power_supply/battery/capacity"
@@ -180,7 +181,19 @@ in_schedule() {
   return 0
 }
 
-# ---------- 首次生成默认配置 ----------
+# ---------- 首次生成默认配置（含旧版迁移）----------
+# 配置放在 /data/adb/bypass_charger/ 下，更新模块时不会被清空
+if [ ! -f "$CONF_FILE" ]; then
+  mkdir -p "/data/adb/bypass_charger" 2>/dev/null
+  # 迁移旧版：旧配置在模块目录内
+  _OLD_CONF="$MODULE_DIR/config.sh"
+  if [ -f "$_OLD_CONF" ]; then
+    cp "$_OLD_CONF" "$CONF_FILE" 2>/dev/null
+    chmod 666 "$CONF_FILE" 2>/dev/null
+    lg "已迁移旧配置到 $CONF_FILE"
+  fi
+fi
+
 if [ ! -f "$CONF_FILE" ]; then
   cat > "$CONF_FILE" <<-EOF
 # 旁路供电配置
@@ -198,7 +211,7 @@ SCHEDULE_ENABLED=0
 SCHEDULE_START=23:00
 SCHEDULE_END=07:00
 EOF
-  chmod 644 "$CONF_FILE"
+  chmod 666 "$CONF_FILE" 2>/dev/null
 fi
 
 lg "守护进程启动 PID=$$"
