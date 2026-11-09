@@ -52,6 +52,9 @@ _lg() {
   fi
 }
 
+# 充电控制节点写操作的串行化锁在 common.sh 中定义，与 webui.sh / uninstall.sh 共用同一把 flock
+. "$MODULE_DIR/common.sh"
+
 # ---------- 探测控制节点（新系统在 smart_charge，旧系统在 battery） ----------
 NODE_CACHE="$MODULE_DIR/node.path"
 find_node() {
@@ -153,9 +156,9 @@ chmod 644 "$PID_FILE" 2>/dev/null
 cleanup() {
   # 长睡时 nap 拉起的 sleep 子进程，不杀会变孤儿继续挂 3600 秒
   [ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null
-  echo 0 > "$CONTROL_FILE" 2>/dev/null
+  write_node "$CONTROL_FILE" 0
   # 精确模式：必须同时放开 soc_limit，否则停充后上限残留，设备充不到 100%
-  [ -n "$SOC_LIMIT_FILE" ] && echo 100 > "$SOC_LIMIT_FILE" 2>/dev/null
+  [ -n "$SOC_LIMIT_FILE" ] && write_node "$SOC_LIMIT_FILE" 100
   rm -f "$PID_FILE"
   rm -rf "$LOCK_DIR" 2>/dev/null
   lg "守护进程退出，已恢复充电"
@@ -211,11 +214,11 @@ restore_charge() {
   # 精确模式：放开充电上限
   if [ -n "$SOC_LIMIT_FILE" ]; then
     _cl=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
-    [ "$_cl" != "100" ] && echo 100 > "$SOC_LIMIT_FILE" 2>/dev/null
+    [ "$_cl" != "100" ] && write_node "$SOC_LIMIT_FILE" 100
   fi
   # 兼容模式：清掉夜间充电（旁路）标记
-  _c=$(cat "$CONTROL_FILE" 2>/dev/null)
-  [ "$_c" != "0" ] && echo 0 > "$CONTROL_FILE" 2>/dev/null
+    _c=$(cat "$CONTROL_FILE" 2>/dev/null)
+    [ "$_c" != "0" ] && write_node "$CONTROL_FILE" 0
 }
 
 # ---------- 首次生成默认配置（含旧版迁移）----------
@@ -367,7 +370,7 @@ while :; do
   if [ -n "$SOC_LIMIT_FILE" ]; then
     # 夜间充电标记必须保持 0：一旦为 1，厂商会按它自己的 80% 上限介入，
     # 反而把 soc_limit 抢回去。
-    [ "$cur" != "0" ] && echo 0 > "$CONTROL_FILE" 2>/dev/null
+    [ "$cur" != "0" ] && write_node "$CONTROL_FILE" 0
 
     cur_limit=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
     case "$cur_limit" in ''|*[!0-9]*) cur_limit=100 ;; esac
@@ -392,7 +395,7 @@ while :; do
     fi
 
     if [ "$wl" != "$cur_limit" ]; then
-      if echo "$wl" > "$SOC_LIMIT_FILE" 2>/dev/null; then
+      if write_node "$SOC_LIMIT_FILE" "$wl"; then
         if [ "$wl" = "100" ]; then
           lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 放开充电上限"
         else
@@ -427,7 +430,7 @@ while :; do
   fi
 
   if [ "$cur" != "$desired" ]; then
-    if echo "$desired" > "$CONTROL_FILE" 2>/dev/null; then
+    if write_node "$CONTROL_FILE" "$desired"; then
       if [ "$desired" = "1" ]; then
         lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 开启旁路 [$st]"
       else

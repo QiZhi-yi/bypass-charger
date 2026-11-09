@@ -17,6 +17,8 @@
 # ============================================================
 
 MODULE_DIR="/data/adb/modules/bypass_charger"
+# 充电控制节点写操作的串行化锁（与守护进程共用，杜绝并发写死锁）
+. "$MODULE_DIR/common.sh"
 # 配置放在模块目录外，更新模块时不会被清空
 CONF_FILE="/data/adb/bypass_charger/config.sh"
 PID_FILE="$MODULE_DIR/daemon.pid"
@@ -302,10 +304,10 @@ case "$1" in
     # 进程确认退出后再兜底清理，避免误删新实例刚拿到的锁
     NODE=$(find_node)
     if [ -n "$NODE" ]; then
-      echo 0 > "$NODE" 2>/dev/null
+      write_node "$NODE" 0
       # 精确模式：放开 soc_limit，避免上限残留导致不充电
       _sd=$(dirname "$NODE")
-      [ -e "$_sd/soc_limit" ] && echo 100 > "$_sd/soc_limit" 2>/dev/null
+      [ -e "$_sd/soc_limit" ] && write_node "$_sd/soc_limit" 100
     fi
     echo "OK=stopped"
     ;;

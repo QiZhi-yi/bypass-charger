@@ -38,6 +38,7 @@ FILES = [
     ("auto_bypass.sh",     ["auto_bypass.sh"]),
     ("webui.sh",           ["webui.sh"]),
     ("uninstall.sh",       ["uninstall.sh"]),
+    ("common.sh",          ["common.sh"]),
     ("webroot/index.html", ["webroot/index.html"]),
 ]
 

@@ -8,6 +8,9 @@ case "$0" in
   */*) MODDIR=${0%/*} ;;
   *)   MODDIR=/data/adb/modules/bypass_charger ;;
 esac
+MODULE_DIR="$MODDIR"
+# 充电控制节点写操作的串行化锁（与守护进程共用，杜绝并发写死锁）
+. "$MODDIR/common.sh"
 DATA=/data/adb/bypass_charger
 ORIG_ENV="$DATA/orig.env"
 
@@ -35,7 +38,7 @@ if [ -f "$ORIG_ENV" ]; then
   [ -z "$MODE" ] && MODE=644
   if [ -n "$NODE" ] && [ -e "$NODE" ]; then
     chmod 0660 "$NODE" 2>/dev/null
-    echo "$VAL" > "$NODE" 2>/dev/null
+    write_node "$NODE" "$VAL"
     chmod "$MODE" "$NODE" 2>/dev/null
     echo "- 已还原充电节点 $NODE = $VAL（权限 $MODE）"
   else
@@ -50,7 +53,7 @@ else
     /sys/devices/platform/smart_charge/smart_night \
     /sys/devices/platform/soc/soc:smart_charge/smart_night
   do
-    [ -e "$n" ] && echo 0 > "$n" 2>/dev/null && NODE="$n"
+    [ -e "$n" ] && write_node "$n" 0 && NODE="$n"
   done
   echo "- 无原始记录，已按默认值复位充电节点"
 fi
@@ -72,7 +75,7 @@ $SOC_DONE
 " in *"
 $s
 "*) ;; *)
-      echo "$SOC_VAL" > "$s" 2>/dev/null
+      write_node "$s" "$SOC_VAL"
       echo "- 已复位充电上限 $s = $SOC_VAL"
       SOC_DONE="$SOC_DONE
 $s"
