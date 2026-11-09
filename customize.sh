@@ -73,8 +73,18 @@ if [ -n "$NODE" ] && [ ! -f "$ORIG_ENV" ]; then
   _mode=$(stat -c '%a' "$NODE" 2>/dev/null)
   [ -z "$_val" ] && _val=0
   [ -z "$_mode" ] && _mode=644
-  printf 'ORIG_NODE=%s\nORIG_NIGHT_VAL=%s\nORIG_NIGHT_MODE=%s\n' "$NODE" "$_val" "$_mode" > "$ORIG_ENV" 2>/dev/null
-  _print "✓ 已记录节点原始值 $_val（权限 $_mode），卸载时自动还原"
+  # 精确模式还要记录 soc_limit 原始值，卸载时一并还原
+  _soc_dir=$(dirname "$NODE")
+  if [ -e "$_soc_dir/soc_limit" ]; then
+    _soc_file="$_soc_dir/soc_limit"
+    _soc_val=$(cat "$_soc_file" 2>/dev/null)
+    printf 'ORIG_NODE=%s\nORIG_NIGHT_VAL=%s\nORIG_NIGHT_MODE=%s\nORIG_SOC_FILE=%s\nORIG_SOC_VAL=%s\n' \
+      "$NODE" "$_val" "$_mode" "$_soc_file" "$_soc_val" > "$ORIG_ENV" 2>/dev/null
+  else
+    printf 'ORIG_NODE=%s\nORIG_NIGHT_VAL=%s\nORIG_NIGHT_MODE=%s\n' \
+      "$NODE" "$_val" "$_mode" > "$ORIG_ENV" 2>/dev/null
+  fi
+  _print "✓ 已记录节点原始值，卸载时自动还原"
 fi
 
 # ---------- 配置迁移到模块目录外（更新时不会被清空）----------

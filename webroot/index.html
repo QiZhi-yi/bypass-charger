@@ -189,14 +189,14 @@
         <span class="sl-l">停止充电</span>
         <span class="sl-v" id="v1">80%</span>
       </div>
-      <input type="range" id="t1" min="20" max="100" step="1" value="80">
+      <input type="range" id="t1" min="1" max="100" step="1" value="80">
     </div>
     <div class="sl">
       <div class="sl-h">
         <span class="sl-l">恢复充电</span>
         <span class="sl-v" id="v2">75%</span>
       </div>
-      <input type="range" id="t2" min="10" max="99" step="1" value="75">
+      <input type="range" id="t2" min="1" max="99" step="1" value="75">
     </div>
     <div class="hint" id="hint">恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。</div>
     <button id="btnSave">保存阈值</button>
@@ -527,11 +527,12 @@
     var mode = s.MODE || "compat";
     if (mode !== lastMode) {
       lastMode = mode;
-      var floor = (mode === "precise") ? 20 : 80;
+      var floor = (mode === "precise") ? 1 : 80;
       el("t1").min = floor;
+      el("t2").min = 1;
       if (parseInt(el("t1").value, 10) < floor) el("t1").value = floor;
       el("hint").innerHTML = (mode === "precise")
-        ? '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型支持 <b>精确模式</b>，停止阈值可设 20–100%。'
+        ? '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型支持 <b>精确模式</b>，停止阈值可设 1–100%。'
         : '恢复阈值需低于停止阈值，至少相差 5%；否则会在同一电量反复开关。<br>本机型只能走厂商夜间充电（<b>兼容模式</b>），停止阈值最低 <b>80%</b>。';
       var mb = el("modeBadge");
       mb.textContent = (mode === "precise") ? "精确模式 · 可设 1-100%" : "兼容模式 · 可设 80-100%";

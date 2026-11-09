@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.3.2
+# 自动旁路供电 v10.3.3
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -33,6 +33,7 @@ WL_ONLINE="/sys/class/power_supply/wireless/online"
 # 空闲（未插电 / 模块关闭）时的巡检间隔，比正常巡检更长以省电。
 # 未插电时仍需定期醒来检测「插上充电器」这一事件。
 IDLE_INTERVAL=60
+SLEEP_PID=""
 
 # 日志分级：lg=信息 / lgw=警告 / lge=错误
 lg()  { _lg I "$@"; }
@@ -150,6 +151,8 @@ chmod 644 "$PID_FILE" 2>/dev/null
 
 # 退出时确保恢复充电并释放锁
 cleanup() {
+  # 长睡时 nap 拉起的 sleep 子进程，不杀会变孤儿继续挂 3600 秒
+  [ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null
   echo 0 > "$CONTROL_FILE" 2>/dev/null
   # 精确模式：必须同时放开 soc_limit，否则停充后上限残留，设备充不到 100%
   [ -n "$SOC_LIMIT_FILE" ] && echo 100 > "$SOC_LIMIT_FILE" 2>/dev/null
@@ -157,11 +160,14 @@ cleanup() {
   rm -rf "$LOCK_DIR" 2>/dev/null
   lg "守护进程退出，已恢复充电"
 }
-trap cleanup EXIT INT TERM
+# 只在真正退出时清理一次；INT/TERM 必须显式 exit，
+# 否则 trap 跑完脚本会继续执行主循环 —— 锁已释放但进程还活着，
+# 新实例又能拿到锁，造成双实例互抢节点。
+trap cleanup EXIT
+trap 'exit 0' INT TERM
 
 # 可被打断的等待：WebUI 改完配置会发 SIGUSR1，立刻醒来重新裁决，
 # 不用干等一整个巡检周期（间隔设成 120 秒时尤其重要）
-SLEEP_PID=""
 trap 'if [ -n "$SLEEP_PID" ]; then kill "$SLEEP_PID" 2>/dev/null; fi' USR1
 
 nap() {
@@ -185,12 +191,14 @@ in_schedule() {
 }
 
 # ---------- 计算距下一个 HH:MM 还有多少秒（今天已过则算明天）----------
+# 不用 base#number 语法（部分机型 sh 不支持），改用去前导零。
+strip0() { _v=${1#0}; echo "${_v:-0}"; }
 secs_until() {
-  _h=$((10#${1%%:*}))
-  _m=$((10#${1##*:}))
-  _now_h=$((10#$(date +%H)))
-  _now_m=$((10#$(date +%M)))
-  _now_s=$((10#$(date +%S)))
+  _h=$(strip0 "${1%%:*}")
+  _m=$(strip0 "${1##*:}")
+  _now_h=$(strip0 "$(date +%H)")
+  _now_m=$(strip0 "$(date +%M)")
+  _now_s=$(strip0 "$(date +%S)")
   _d=$(( _h * 3600 + _m * 60 - _now_h * 3600 - _now_m * 60 - _now_s ))
   [ "$_d" -lt 0 ] && _d=$(( _d + 86400 ))
   echo "$_d"
@@ -273,6 +281,10 @@ while :; do
   [ -z "$SCHEDULE_START" ] && SCHEDULE_START="23:00"
   [ -z "$SCHEDULE_END" ] && SCHEDULE_END="07:00"
 
+  # 空闲间隔不能比正常巡检更勤快（用户把 CHECK_INTERVAL 设 600 秒时尤其重要）
+  idle=$IDLE_INTERVAL
+  [ "$CHECK_INTERVAL" -gt "$idle" ] 2>/dev/null && idle=$CHECK_INTERVAL
+
   # ---------- 定时窗口外 → 睡到下次定时开始（封顶 1 小时）----------
   # 窗口外不需要任何控制，直接长睡，到点再醒（省电）。改配置由 SIGUSR1 唤醒。
   if [ "$SCHEDULE_ENABLED" = "1" ] && ! in_schedule; then
@@ -299,13 +311,13 @@ while :; do
     fi
     LAST_EN=""
     LAST_DI=""
-    nap "$IDLE_INTERVAL"
+    nap "$idle"
     continue
   fi
 
   cap=$(tr -cd '0-9' < "$CAP_FILE" 2>/dev/null)
   if [ -z "$cap" ]; then
-    nap "$IDLE_INTERVAL"
+    nap "$idle"
     continue
   fi
 
@@ -326,7 +338,7 @@ while :; do
     # 清空阈值记忆，让插电瞬间按当前电量重新裁决，而不是沿用旧的滞回状态
     LAST_EN=""
     LAST_DI=""
-    nap "$IDLE_INTERVAL"
+    nap "$idle"
     continue
   fi
 

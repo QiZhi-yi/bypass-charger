@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.3.2
+# KsuWebUI 后端 —— 自动旁路供电 v10.3.3
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -128,7 +128,7 @@ set_key() {
   case "$k" in
     SCHEDULE_START|SCHEDULE_END)
       case "$v" in
-        [0-2][0-9]:[0-5][0-9]) ;;
+        [01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;;
         *) echo "ERR=bad_time"; return 1 ;;
       esac
       ;;
@@ -268,14 +268,24 @@ case "$1" in
 
   stop)
     PID=$(cat "$PID_FILE" 2>/dev/null)
-    [ -n "$PID" ] && kill "$PID" 2>/dev/null
-    sleep 1
-    rm -rf "$MODULE_DIR/.lock" "$PID_FILE"
+    if [ -n "$PID" ]; then
+      kill "$PID" 2>/dev/null          # TERM：让守护进程走 cleanup 自己释放锁
+      i=0
+      while [ -d "/proc/$PID" ] && [ "$i" -lt 15 ]; do
+        sleep 0.2; i=$((i + 1))
+      done
+      # 仍活着才强杀，避免留僵尸进程继续写节点
+      [ -d "/proc/$PID" ] && kill -9 "$PID" 2>/dev/null
+      sleep 0.5
+    fi
+    # 进程确认退出后再兜底清理，避免误删新实例刚拿到的锁
     NODE=$(find_node)
-    [ -n "$NODE" ] && echo 0 > "$NODE" 2>/dev/null
-    # 精确模式：放开 soc_limit，避免上限残留导致不充电
-    _sd=$(dirname "$NODE" 2>/dev/null)
-    [ -n "$_sd" ] && [ -e "$_sd/soc_limit" ] && echo 100 > "$_sd/soc_limit" 2>/dev/null
+    if [ -n "$NODE" ]; then
+      echo 0 > "$NODE" 2>/dev/null
+      # 精确模式：放开 soc_limit，避免上限残留导致不充电
+      _sd=$(dirname "$NODE")
+      [ -e "$_sd/soc_limit" ] && echo 100 > "$_sd/soc_limit" 2>/dev/null
+    fi
     echo "OK=stopped"
     ;;
 
