@@ -29,6 +29,8 @@ if [ -f "$ORIG_ENV" ]; then
   NODE=$(grep -m1 '^ORIG_NODE=' "$ORIG_ENV" | cut -d= -f2-)
   VAL=$(grep -m1 '^ORIG_NIGHT_VAL=' "$ORIG_ENV" | cut -d= -f2-)
   MODE=$(grep -m1 '^ORIG_NIGHT_MODE=' "$ORIG_ENV" | cut -d= -f2-)
+  SOC_FILE=$(grep -m1 '^ORIG_SOC_FILE=' "$ORIG_ENV" | cut -d= -f2-)
+  SOC_VAL=$(grep -m1 '^ORIG_SOC_VAL=' "$ORIG_ENV" | cut -d= -f2-)
   [ -z "$VAL" ] && VAL=0
   [ -z "$MODE" ] && MODE=644
   if [ -n "$NODE" ] && [ -e "$NODE" ]; then
@@ -39,14 +41,8 @@ if [ -f "$ORIG_ENV" ]; then
   else
     echo "- 未找到控制节点，跳过还原"
   fi
-  # 精确模式：还原 soc_limit 原始值，避免卸载后充电上限残留
-  SOC_FILE=$(grep -m1 '^ORIG_SOC_FILE=' "$ORIG_ENV" | cut -d= -f2-)
-  SOC_VAL=$(grep -m1 '^ORIG_SOC_VAL=' "$ORIG_ENV" | cut -d= -f2-)
-  if [ -n "$SOC_FILE" ] && [ -e "$SOC_FILE" ] && [ -n "$SOC_VAL" ]; then
-    echo "$SOC_VAL" > "$SOC_FILE" 2>/dev/null
-    echo "- 已还原充电上限 $SOC_FILE = $SOC_VAL"
-  fi
 else
+  NODE=""; SOC_FILE=""
   # 无记录时兜底：把已知节点复位为 0
   for n in \
     /sys/class/power_supply/battery/night_charging \
@@ -54,18 +50,37 @@ else
     /sys/devices/platform/smart_charge/smart_night \
     /sys/devices/platform/soc/soc:smart_charge/smart_night
   do
-    [ -e "$n" ] && echo 0 > "$n" 2>/dev/null
+    [ -e "$n" ] && echo 0 > "$n" 2>/dev/null && NODE="$n"
   done
-  # 精确模式：放开 soc_limit，避免上限残留导致卸载后充不满
-  for s in \
-    /sys/devices/platform/smart_charge/soc_limit \
-    /sys/devices/platform/soc/soc:smart_charge/soc_limit
-  do
-    [ -e "$s" ] && echo 100 > "$s" 2>/dev/null
-  done
-  echo "- 无原始记录，已按默认值复位充电节点与上限"
+  echo "- 无原始记录，已按默认值复位充电节点"
 fi
 
-# 3. 删除配置与运行数据
+# 3. 精确模式：无论有无 orig.env 记录，都必须复位 soc_limit。
+# 老版本 orig.env 没有 ORIG_SOC_FILE，只走上面的分支会让上限残留（实测残留 68，卸载后充不满）。
+# 没有原始值时按 100（不限制）复位。
+[ -z "$SOC_VAL" ] && SOC_VAL=100
+# 候选路径：记录中的路径 / 控制节点同级推导 / 已知兜底路径（路径无空格，重复写无害）
+set -- /sys/devices/platform/smart_charge/soc_limit \
+       /sys/devices/platform/soc/soc:smart_charge/soc_limit
+[ -n "$NODE" ] && set -- "$(dirname "$NODE")/soc_limit" "$@"
+[ -n "$SOC_FILE" ] && set -- "$SOC_FILE" "$@"
+SOC_DONE=""
+for s in "$@"; do
+  [ -n "$s" ] && [ -e "$s" ] && {
+    case "
+$SOC_DONE
+" in *"
+$s
+"*) ;; *)
+      echo "$SOC_VAL" > "$s" 2>/dev/null
+      echo "- 已复位充电上限 $s = $SOC_VAL"
+      SOC_DONE="$SOC_DONE
+$s"
+      ;;
+    esac
+  }
+done
+
+# 4. 删除配置与运行数据
 rm -rf "$DATA"
 echo "- 配置与运行数据已删除"
