@@ -65,55 +65,76 @@ find_node() {
   return 1
 }
 
-ensure_conf() {
-  [ -f "$CONF_FILE" ] && return
-  mkdir -p "/data/adb/bypass_charger" 2>/dev/null
-  # 迁移旧版：旧配置在模块目录内
-  _OLD_CONF="$MODULE_DIR/config.sh"
-  if [ -f "$_OLD_CONF" ]; then
-    cp "$_OLD_CONF" "$CONF_FILE" 2>/dev/null
-    chmod 666 "$CONF_FILE" 2>/dev/null
-    return
-  fi
-  cat > "$CONF_FILE" <<-EOF
-ENABLED=1
-ENABLE_THRESHOLD=80
-DISABLE_THRESHOLD=75
-CHECK_INTERVAL=15
-SCHEDULE_ENABLED=0
-SCHEDULE_START=23:00
-SCHEDULE_END=07:00
-EOF
-  # 666：WebUI 的执行身份未必是 root，放开写权限让配置文件能被改
+# ------------------------------------------------------------
+# 配置：所有项统一放在 $CONF_FILE，每行行尾注释标明功能。
+# 顺序固定，便于用户直接编辑；缺失项自动补默认值。
+# ------------------------------------------------------------
+CONF_KEYS="ENABLED ENABLE_THRESHOLD DISABLE_THRESHOLD CHECK_INTERVAL SCHEDULE_ENABLED SCHEDULE_START SCHEDULE_END"
+
+conf_default() {
+  case "$1" in
+    ENABLED)            echo 1 ;;
+    ENABLE_THRESHOLD)   echo 80 ;;
+    DISABLE_THRESHOLD)  echo 75 ;;
+    CHECK_INTERVAL)     echo 15 ;;
+    SCHEDULE_ENABLED)   echo 0 ;;
+    SCHEDULE_START)     echo "23:00" ;;
+    SCHEDULE_END)       echo "07:00" ;;
+  esac
+}
+
+conf_comment() {
+  case "$1" in
+    ENABLED)            echo "模块总开关：1=启用旁路 / 0=关闭（关闭后恢复充电）" ;;
+    ENABLE_THRESHOLD)   echo "停止充电阈值(%)：电量升到此值开启旁路" ;;
+    DISABLE_THRESHOLD)  echo "恢复充电阈值(%)：电量降到此值恢复充电，须低于停止阈值至少 5" ;;
+    CHECK_INTERVAL)     echo "巡检间隔(秒)：插电时多久检查一次电量，5-600" ;;
+    SCHEDULE_ENABLED)   echo "定时旁路开关：1=仅在下面时段启用 / 0=全天启用" ;;
+    SCHEDULE_START)     echo "定时开始时间(HH:MM)" ;;
+    SCHEDULE_END)       echo "定时结束时间(HH:MM)，跨午夜时填小于开始时间的值" ;;
+  esac
+}
+
+# 取配置值：必须剥掉行尾注释，否则回读校验会带上注释导致误判写入失败
+read_key() {
+  grep "^$1=" "$CONF_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | cut -d'#' -f1 | tr -d ' \t\r'
+}
+
+# 按固定顺序重写整份配置：$1/$2 为本次要写入的键与值（可省略＝仅规范化）
+render_conf() {
+  _out=""
+  for _key in $CONF_KEYS; do
+    _val=$(read_key "$_key")
+    [ -z "$_val" ] && _val=$(conf_default "$_key")
+    [ -n "$1" ] && [ "$_key" = "$1" ] && _val="$2"
+    _out="$_out$_key=$_val  # $(conf_comment "$_key")
+"
+  done
+  printf '%s' "$_out" > "$CONF_FILE" 2>/dev/null
   chmod 666 "$CONF_FILE" 2>/dev/null
 }
 
-# 原地重写配置：不用 sed -i（它需要在目录里建临时文件，目录不可写就失败），
-# 也不需要目录写权限，只要文件本身可写即可。
-write_conf() {
-  _k="$1"; _v="$2"
-  _new=""
-  _found=0
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "$_line" in
-      "$_k="*)
-        _new="$_new$_k=$_v
-"
-        _found=1
-        ;;
-      *)
-        _new="$_new$_line
-"
-        ;;
-    esac
-  done < "$CONF_FILE"
-  [ "$_found" = "0" ] && _new="$_new$_k=$_v
-"
-  printf '%s' "$_new" > "$CONF_FILE" 2>/dev/null
+ensure_conf() {
+  if [ ! -f "$CONF_FILE" ]; then
+    mkdir -p "/data/adb/bypass_charger" 2>/dev/null
+    # 迁移旧版：旧配置在模块目录内（先把值读出来，再按新格式重写）
+    _OLD_CONF="$MODULE_DIR/config.sh"
+    [ -f "$_OLD_CONF" ] && cp "$_OLD_CONF" "$CONF_FILE" 2>/dev/null
+  fi
+  # 规范化：补齐缺失项、把行上方注释改成行尾注释。
+  # 只在不合规时重写一次，之后每次 status 都是纯读，开销可忽略。
+  _need=0
+  for _key in $CONF_KEYS; do
+    [ -z "$(read_key "$_key")" ] && _need=1
+  done
+  grep -q '  # ' "$CONF_FILE" 2>/dev/null || _need=1
+  [ "$_need" = "1" ] && render_conf
 }
 
-read_key() {
-  grep "^$1=" "$CONF_FILE" 2>/dev/null | tail -1 | cut -d= -f2-
+# 原地重写配置：不用 sed -i（目录不可写会失败），直接整份重写，
+# 同时保证顺序、注释、缺失项都正确。
+write_conf() {
+  render_conf "$1" "$2"
 }
 
 set_key() {

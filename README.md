@@ -324,7 +324,22 @@ void   exec(String cmd, String cbName);
 
 ## 参数说明
 
-配置文件：`/data/adb/bypass_charger/config.sh`
+配置文件：`/data/adb/bypass_charger/config.sh`（在模块目录外，更新模块不会清空）
+
+所有配置项集中在这一个文件里，**每行行尾都标注了功能**，可直接编辑：
+
+```sh
+ENABLED=1  # 模块总开关：1=启用旁路 / 0=关闭（关闭后恢复充电）
+ENABLE_THRESHOLD=80  # 停止充电阈值(%)：电量升到此值开启旁路
+DISABLE_THRESHOLD=75  # 恢复充电阈值(%)：电量降到此值恢复充电，须低于停止阈值至少 5
+CHECK_INTERVAL=15  # 巡检间隔(秒)：插电时多久检查一次电量，5-600
+SCHEDULE_ENABLED=0  # 定时旁路开关：1=仅在下面时段启用 / 0=全天启用
+SCHEDULE_START=23:00  # 定时开始时间(HH:MM)
+SCHEDULE_END=07:00  # 定时结束时间(HH:MM)，跨午夜时填小于开始时间的值
+```
+
+> 行尾注释是 shell 合法语法，守护进程和 WebUI 都会正确忽略。
+> 从旧版本升级时，缺失的配置项会自动补默认值并统一成上述格式，已有数值不会被改动。
 
 | 参数 | 默认 | 范围 | 说明 |
 |---|---|---|---|

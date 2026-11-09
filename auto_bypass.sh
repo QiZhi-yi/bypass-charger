@@ -233,20 +233,13 @@ fi
 
 if [ ! -f "$CONF_FILE" ]; then
   cat > "$CONF_FILE" <<-EOF
-# 旁路供电配置
-# ENABLED=1 启用模块 / 0 关闭（关闭后恢复充电）
-ENABLED=1
-# 电量升到 ENABLE_THRESHOLD 时停止充电（开启旁路）
-ENABLE_THRESHOLD=80
-# 电量降到 DISABLE_THRESHOLD 时恢复充电
-DISABLE_THRESHOLD=75
-# 巡检间隔（秒）
-CHECK_INTERVAL=15
-# 定时旁路：1=仅在下面时间段内启用，0=全天启用
-SCHEDULE_ENABLED=0
-# 定时开始/结束时间（HH:MM，跨午夜用开始>结束表示）
-SCHEDULE_START=23:00
-SCHEDULE_END=07:00
+ENABLED=1  # 模块总开关：1=启用旁路 / 0=关闭（关闭后恢复充电）
+ENABLE_THRESHOLD=80  # 停止充电阈值(%)：电量升到此值开启旁路
+DISABLE_THRESHOLD=75  # 恢复充电阈值(%)：电量降到此值恢复充电，须低于停止阈值至少 5
+CHECK_INTERVAL=15  # 巡检间隔(秒)：插电时多久检查一次电量，5-600
+SCHEDULE_ENABLED=0  # 定时旁路开关：1=仅在下面时段启用 / 0=全天启用
+SCHEDULE_START=23:00  # 定时开始时间(HH:MM)
+SCHEDULE_END=07:00  # 定时结束时间(HH:MM)，跨午夜时填小于开始时间的值
 EOF
   chmod 666 "$CONF_FILE" 2>/dev/null
 fi
