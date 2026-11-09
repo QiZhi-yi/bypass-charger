@@ -797,7 +797,16 @@
     el("errbox").textContent = "未检测到 KernelSU WebUI 接口。请用 KsuWebUI 打开本页面，直接在浏览器中访问无法控制系统。";
   }
 
+  // 打开页面时唤醒守护进程立刻裁决一次（平时空闲它会长睡省电）。
+  // status 本身即时读 sysfs，先刷一次保证首屏有数；wake 后再刷一次拿裁决后的状态。
+  function wakeDaemon(){
+    run("/system/bin/sh " + SH + " wake")
+      .then(function(){ setTimeout(refresh, 700); })
+      .catch(function(){});
+  }
+
   refresh();
+  wakeDaemon();
   timer = setInterval(function(){ refresh(); }, 3000);
   setInterval(function(){ if (logOpen) refreshLog(); }, 12000);
 
@@ -806,6 +815,7 @@
       clearInterval(timer); timer = null;
     } else if (!timer) {
       refresh();
+      wakeDaemon();
       if (logOpen) refreshLog();
       timer = setInterval(function(){ refresh(); }, 3000);
     }

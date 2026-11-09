@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# 自动旁路供电 v10.3.1
+# 自动旁路供电 v10.3.2
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9
@@ -30,6 +30,9 @@ CAP_FILE="/sys/class/power_supply/battery/capacity"
 STAT_FILE="/sys/class/power_supply/battery/status"
 USB_ONLINE="/sys/class/power_supply/usb/online"
 WL_ONLINE="/sys/class/power_supply/wireless/online"
+# 空闲（未插电 / 模块关闭）时的巡检间隔，比正常巡检更长以省电。
+# 未插电时仍需定期醒来检测「插上充电器」这一事件。
+IDLE_INTERVAL=60
 
 # 日志分级：lg=信息 / lgw=警告 / lge=错误
 lg()  { _lg I "$@"; }
@@ -181,6 +184,32 @@ in_schedule() {
   return 0
 }
 
+# ---------- 计算距下一个 HH:MM 还有多少秒（今天已过则算明天）----------
+secs_until() {
+  _h=$((10#${1%%:*}))
+  _m=$((10#${1##*:}))
+  _now_h=$((10#$(date +%H)))
+  _now_m=$((10#$(date +%M)))
+  _now_s=$((10#$(date +%S)))
+  _d=$(( _h * 3600 + _m * 60 - _now_h * 3600 - _now_m * 60 - _now_s ))
+  [ "$_d" -lt 0 ] && _d=$(( _d + 86400 ))
+  echo "$_d"
+}
+
+# ---------- 恢复充电（进入任何空闲长睡前必须调用）----------
+# 空闲时若不复位，之前压低的 soc_limit / 置 1 的 smart_night 会一直残留，
+# 导致设备插着电却始终不充电。
+restore_charge() {
+  # 精确模式：放开充电上限
+  if [ -n "$SOC_LIMIT_FILE" ]; then
+    _cl=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
+    [ "$_cl" != "100" ] && echo 100 > "$SOC_LIMIT_FILE" 2>/dev/null
+  fi
+  # 兼容模式：清掉夜间充电（旁路）标记
+  _c=$(cat "$CONTROL_FILE" 2>/dev/null)
+  [ "$_c" != "0" ] && echo 0 > "$CONTROL_FILE" 2>/dev/null
+}
+
 # ---------- 首次生成默认配置（含旧版迁移）----------
 # 配置放在 /data/adb/bypass_charger/ 下，更新模块时不会被清空
 if [ ! -f "$CONF_FILE" ]; then
@@ -222,6 +251,8 @@ LAST_EN=""
 LAST_DI=""
 # 记录上次提示过的"低于厂商下限"的阈值，避免每轮刷日志
 LAST_WARN_EN=""
+# 记录当前空闲状态（schedule/disabled/unplugged/空），避免长睡期间重复打日志
+LAST_IDLE=""
 
 while :; do
   # 模块被 KernelSU 禁用则退出
@@ -242,10 +273,65 @@ while :; do
   [ -z "$SCHEDULE_START" ] && SCHEDULE_START="23:00"
   [ -z "$SCHEDULE_END" ] && SCHEDULE_END="07:00"
 
-  # ---------- 定时旁路：开启时，窗口外视为关闭（临时把 ENABLED 置 0）----------
+  # ---------- 定时窗口外 → 睡到下次定时开始（封顶 1 小时）----------
+  # 窗口外不需要任何控制，直接长睡，到点再醒（省电）。改配置由 SIGUSR1 唤醒。
   if [ "$SCHEDULE_ENABLED" = "1" ] && ! in_schedule; then
-    ENABLED=0
+    restore_charge
+    if [ "$LAST_IDLE" != "schedule" ]; then
+      lg "定时窗口外，已恢复充电并进入长睡，到定时开始自动唤醒"
+      LAST_IDLE="schedule"
+    fi
+    _until=$(secs_until "$SCHEDULE_START")
+    [ "$_until" -gt 3600 ] && _until=3600
+    [ "$_until" -lt 5 ] && _until=5
+    nap "$_until"
+    continue
   fi
+
+  cur=$(cat "$CONTROL_FILE" 2>/dev/null)
+
+  # ---------- 模块关闭 → 恢复充电后睡长觉 ----------
+  if [ "$ENABLED" != "1" ]; then
+    restore_charge
+    if [ "$LAST_IDLE" != "disabled" ]; then
+      lg "模块已关闭，恢复充电并进入长睡"
+      LAST_IDLE="disabled"
+    fi
+    LAST_EN=""
+    LAST_DI=""
+    nap "$IDLE_INTERVAL"
+    continue
+  fi
+
+  cap=$(tr -cd '0-9' < "$CAP_FILE" 2>/dev/null)
+  if [ -z "$cap" ]; then
+    nap "$IDLE_INTERVAL"
+    continue
+  fi
+
+  st=$(cat "$STAT_FILE" 2>/dev/null)
+
+  # ---------- 未插电 → 清标记后睡长觉 ----------
+  # 拔掉充电器后必须把状态清掉，否则下次插电会卡在滞回死区里一直不充电。
+  powered=0
+  [ "$(cat "$USB_ONLINE" 2>/dev/null)" = "1" ] && powered=1
+  [ "$(cat "$WL_ONLINE" 2>/dev/null)" = "1" ] && powered=1
+
+  if [ "$powered" = "0" ]; then
+    restore_charge
+    if [ "$LAST_IDLE" != "unplugged" ]; then
+      lg "未接电源（电量 ${cap}%），已恢复充电并进入长睡"
+      LAST_IDLE="unplugged"
+    fi
+    # 清空阈值记忆，让插电瞬间按当前电量重新裁决，而不是沿用旧的滞回状态
+    LAST_EN=""
+    LAST_DI=""
+    nap "$IDLE_INTERVAL"
+    continue
+  fi
+
+  # 进入正常巡检，清掉空闲标记
+  LAST_IDLE=""
 
   # ---------- 厂商下限 80%（仅限 smart_night 模式）----------
   # smart_night 不是"立刻停止充电"的开关，而是"开启厂商夜间充电模式"的开关。
@@ -267,15 +353,6 @@ while :; do
     [ "$DISABLE_THRESHOLD" -lt 1 ] && DISABLE_THRESHOLD=1
   fi
 
-  cap=$(tr -cd '0-9' < "$CAP_FILE" 2>/dev/null)
-  if [ -z "$cap" ]; then
-    nap
-    continue
-  fi
-
-  cur=$(cat "$CONTROL_FILE" 2>/dev/null)
-  st=$(cat "$STAT_FILE" 2>/dev/null)
-
   # ================= 精确模式：直接控制 soc_limit =================
   # soc_limit 是厂商真正的充电上限，实测：
   #   写 100 且当前 90% → 立刻 2.4A 充电
@@ -290,12 +367,8 @@ while :; do
     cur_limit=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
     case "$cur_limit" in ''|*[!0-9]*) cur_limit=100 ;; esac
 
-    if [ "$ENABLED" != "1" ]; then
-      wl=100                                # 模块关闭 → 完全放开
-      LAST_EN=$ENABLE_THRESHOLD
-      LAST_DI=$DISABLE_THRESHOLD
-    elif [ "$ENABLE_THRESHOLD" != "$LAST_EN" ] || [ "$DISABLE_THRESHOLD" != "$LAST_DI" ]; then
-      # 阈值刚被改过（或守护进程刚启动）→ 按当前电量重新裁决，不走滞回
+    if [ "$ENABLE_THRESHOLD" != "$LAST_EN" ] || [ "$DISABLE_THRESHOLD" != "$LAST_DI" ]; then
+      # 阈值刚被改过（或守护进程刚启动/刚插电）→ 按当前电量重新裁决，不走滞回
       if [ "$cap" -ge "$ENABLE_THRESHOLD" ]; then
         wl=$((ENABLE_THRESHOLD - 1))
         [ "$wl" -lt 1 ] && wl=1
@@ -315,9 +388,7 @@ while :; do
 
     if [ "$wl" != "$cur_limit" ]; then
       if echo "$wl" > "$SOC_LIMIT_FILE" 2>/dev/null; then
-        if [ "$ENABLED" != "1" ]; then
-          lg "模块已关闭 -> 充电上限放开为 ${wl}%（电量 ${cap}%）"
-        elif [ "$wl" = "100" ]; then
+        if [ "$wl" = "100" ]; then
           lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 放开充电上限"
         else
           lg "电量 ${cap}%（停止阈值 ${ENABLE_THRESHOLD}%）-> 停充（上限 ${wl}%）"
@@ -332,35 +403,6 @@ while :; do
   fi
 
   # ================= 兼容模式：无 soc_limit 的机型用 smart_night =================
-  if [ "$ENABLED" != "1" ]; then
-    [ "$cur" != "0" ] && {
-      echo 0 > "$CONTROL_FILE" 2>/dev/null
-      lg "模块已关闭，恢复充电"
-    }
-    nap
-    continue
-  fi
-
-  # ---------- 未接电源时不进入旁路 ----------
-  # 拔掉充电器后必须把状态清掉，否则电量在滞回死区里掉下来时状态还留着 1，
-  # 下次插电会因为 cap 仍在死区内而"保持原状态"，导致插着电却一直不充电，
-  # 而且插着电电量不掉，永远掉不到恢复阈值，形成死锁。
-  powered=0
-  [ "$(cat "$USB_ONLINE" 2>/dev/null)" = "1" ] && powered=1
-  [ "$(cat "$WL_ONLINE" 2>/dev/null)" = "1" ] && powered=1
-
-  if [ "$powered" = "0" ]; then
-    if [ "$cur" != "0" ]; then
-      echo 0 > "$CONTROL_FILE" 2>/dev/null
-      lg "已断开电源 -> 关闭旁路标记（电量 ${cap}%）"
-    fi
-    # 清空阈值记忆，让插电瞬间按当前电量重新裁决，而不是沿用旧的滞回状态
-    LAST_EN=""
-    LAST_DI=""
-    nap
-    continue
-  fi
-
   # 阈值被改过、或守护进程刚启动/刚插电时，按当前电量重新裁决一次（不走滞回）。
   # 否则把停止阈值调高到当前电量之上后，会一直卡在死区里不恢复充电。
   if [ "$ENABLE_THRESHOLD" != "$LAST_EN" ] || [ "$DISABLE_THRESHOLD" != "$LAST_DI" ]; then

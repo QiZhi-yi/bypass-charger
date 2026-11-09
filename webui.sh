@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-# KsuWebUI 后端 —— 自动旁路供电 v10.3.1
+# KsuWebUI 后端 —— 自动旁路供电 v10.3.2
 #
 # 作者: 爱哭的小女孩龍（酷安）
 # 原版: 酷安@柳下惠77  v9.9（原版无 WebUI，本文件为新增）
@@ -241,6 +241,18 @@ case "$1" in
     _dpid=$(cat "$PID_FILE" 2>/dev/null)
     [ -n "$_dpid" ] && kill -USR1 "$_dpid" 2>/dev/null
     echo "$_r"
+    ;;
+
+  wake)
+    # WebUI 打开时调用：唤醒处于长睡的守护进程，立刻裁决一次并刷新状态。
+    # status 本身即时读 sysfs，但旁路开关的裁决由守护进程负责，需要唤醒它。
+    _dpid=$(cat "$PID_FILE" 2>/dev/null)
+    if [ -n "$_dpid" ] && [ -d "/proc/$_dpid" ]; then
+      kill -USR1 "$_dpid" 2>/dev/null
+      echo "OK=woken"
+    else
+      echo "ERR=no_daemon"
+    fi
     ;;
 
   start)
