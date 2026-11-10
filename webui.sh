@@ -212,6 +212,23 @@ case "$1" in
     CUR=$(cat "$CUR_FILE" 2>/dev/null);       [ -z "$CUR" ] && CUR=0
     TMP=$(cat "$TEMP_FILE" 2>/dev/null);      [ -z "$TMP" ] && TMP=0
 
+    # 旁路生效判定（权威信号，前端直接用它显示「旁路中」，不再靠充电状态/电流启发式）：
+    #   精确模式：插电 且 soc_limit < 100（充电上限被压低 = 已停止充电）
+    #   兼容模式：插电 且 smart_night == 1
+    BYPASS=0
+    _pw=0
+    [ "$(cat /sys/class/power_supply/usb/online 2>/dev/null)" = "1" ] && _pw=1
+    [ "$(cat /sys/class/power_supply/wireless/online 2>/dev/null)" = "1" ] && _pw=1
+    if [ "$_pw" = "1" ]; then
+      if [ "$MODE" = "precise" ]; then
+        _sl=$(cat "$(dirname "$NODE")/soc_limit" 2>/dev/null)
+        case "$_sl" in ''|*[!0-9]*) _sl=100 ;; esac
+        [ "$_sl" -lt 100 ] && BYPASS=1
+      elif [ "$NODE_VAL" = "1" ]; then
+        BYPASS=1
+      fi
+    fi
+
     PID=$(cat "$PID_FILE" 2>/dev/null)
     if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
       ALIVE=1
@@ -243,10 +260,10 @@ case "$1" in
     fi
 
     # 必须输出单行！KernelSU 的同步 exec 只回传一行输出
-    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;EFF_ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s;VERSION=%s;SCHEDULE_ENABLED=%s;SCHEDULE_START=%s;SCHEDULE_END=%s;SCHEDULE_ACTIVE=%s\n' \
+    printf 'SUPPORTED=%s;NODE=%s;NODE_VAL=%s;CAP=%s;CHARGE_STATUS=%s;CURRENT=%s;TEMP=%s;ENABLED=%s;EFF_ENABLED=%s;ENABLE_THRESHOLD=%s;DISABLE_THRESHOLD=%s;CHECK_INTERVAL=%s;KSU_DISABLED=%s;DAEMON_PID=%s;DAEMON_ALIVE=%s;UID=%s;MODE=%s;BYPASS=%s;VERSION=%s;SCHEDULE_ENABLED=%s;SCHEDULE_START=%s;SCHEDULE_END=%s;SCHEDULE_ACTIVE=%s\n' \
       "$SUP" "${NODE:-none}" "$NODE_VAL" "$CAP" "$PST" "$CUR" "$TMP" \
       "${ENABLED:-1}" "$EFF_ENABLED" "${ENABLE_THRESHOLD:-80}" "${DISABLE_THRESHOLD:-75}" \
-      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE" "$VER" \
+      "${CHECK_INTERVAL:-15}" "$KDIS" "$PID" "$ALIVE" "$MYUID" "$MODE" "$BYPASS" "$VER" \
       "$SCHEDULE_ENABLED" "$SCHEDULE_START" "$SCHEDULE_END" "$SCHED_ACTIVE"
     ;;
 

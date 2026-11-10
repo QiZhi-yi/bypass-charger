@@ -259,7 +259,7 @@
         <span class="sl-l">每次检查的间隔</span>
         <span class="sl-v" id="v3">15 秒</span>
       </div>
-      <input type="range" id="t3" min="5" max="120" step="5" value="15">
+      <input type="range" id="t3" min="5" max="600" step="5" value="15">
     </div>
     <div class="hint">间隔越短响应越快，但唤醒更频繁、略耗电。建议 10–30 秒。</div>
   </section>
@@ -514,7 +514,7 @@
 
     var enabled = s.ENABLED === "1";
     var effEnabled = s.EFF_ENABLED === "1";
-    var bypass  = String(s.NODE_VAL) === "1";
+    var bypass  = String(s.BYPASS) === "1";
     var alive   = s.DAEMON_ALIVE === "1";
     var supported = s.SUPPORTED === "1";
 
@@ -539,10 +539,9 @@
       mb.style.display = "";
     }
 
-    // 主状态文案
+    // 主状态文案（旁路状态以后端 BYPASS 为准，不再靠充电状态/电流启发式猜）
     var st, sub, color;
     var cst = String(s.CHARGE_STATUS || "").toLowerCase();
-    var cur = parseInt(s.CURRENT, 10);
     if (!supported) {
       st = "机型不支持"; sub = "未找到夜间充电控制节点"; color = "var(--red)";
     } else if (!enabled) {
@@ -555,14 +554,6 @@
       st = "未充电"; sub = "未连接充电器，电池放电中"; color = "#8d95a3";
     } else if (cst === "full") {
       st = "已充满"; sub = "电池已充满，设备由适配器供电"; color = "var(--acc)";
-    } else if (cst === "not charging" || cst === "notcharging") {
-      st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电"; color = "var(--acc)";
-    } else if (cst === "charging") {
-      if (!isNaN(cur) && cur >= -20000 && cur <= 20000) {
-        st = "旁路供电中"; sub = "已停止充电，设备由适配器直接供电"; color = "var(--acc)";
-      } else {
-        st = "正在充电"; sub = "电量未达停止阈值，正常充电中"; color = "var(--blue)";
-      }
     } else {
       st = "正在充电"; sub = "电量未达停止阈值，正常充电中"; color = "var(--blue)";
     }
