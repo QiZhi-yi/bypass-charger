@@ -163,8 +163,17 @@ set_key() {
   esac
   case "$k" in
     ENABLED|SCHEDULE_ENABLED) [ "$v" -gt 1 ] && { echo "ERR=bad_value"; return 1; } ;;
-    ENABLE_THRESHOLD|DISABLE_THRESHOLD)
+    ENABLE_THRESHOLD)
       [ "$v" -lt 1 ] || [ "$v" -gt 100 ] && { echo "ERR=out_of_range"; return 1; }
+      ;;
+    DISABLE_THRESHOLD)
+      [ "$v" -lt 1 ] || [ "$v" -gt 100 ] && { echo "ERR=out_of_range"; return 1; }
+      # 关系校验：恢复阈值必须低于停止阈值、且至少相差 5%，否则拒绝（防绕过前端直接调后端）
+      _et=$(read_key ENABLE_THRESHOLD)
+      [ -z "$_et" ] && _et=80
+      case "$_et" in ''|*[!0-9]*) _et=80 ;; esac
+      [ "$v" -ge "$_et" ] && { echo "ERR=threshold_order"; return 1; }
+      [ $((_et - v)) -lt 5 ] && { echo "ERR=threshold_gap"; return 1; }
       ;;
     CHECK_INTERVAL) { [ "$v" -lt 5 ] || [ "$v" -gt 600 ]; } && { echo "ERR=out_of_range"; return 1; } ;;
   esac

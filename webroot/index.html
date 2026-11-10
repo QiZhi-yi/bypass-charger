@@ -713,7 +713,7 @@
     var t1 = parseInt(el("t1").value, 10);
     var t2 = parseInt(el("t2").value, 10);
     var t3 = parseInt(el("t3").value, 10);
-    if (t2 >= t1) { opMsg("未保存：恢复阈值必须低于停止阈值（当前 停止 " + t1 + "% / 恢复 " + t2 + "%）", false); return; }
+    if (t2 >= t1) { opMsg("提示：憨憨，恢复充电阈值比停止充电阈值还要高永远都不会充电喔~", false); return; }
     if (t1 - t2 < 5) { opMsg("未保存：两个阈值至少相差 5%（当前相差 " + (t1 - t2) + "%）", false); return; }
     withBusy(function(){
       return setKey("ENABLE_THRESHOLD", t1)
