@@ -4,6 +4,8 @@
 
 - 调整安装日志署名：完整作者+原作者写入 module.prop 的 author，删除 customize.sh 里重复输出
 - 项目主页移入 description；安装日志只剩一段完整署名 + 机型适配检测
+- 新增：并发写防护 —— 抽 common.sh，守护进程/WebUI/卸载共用同一把 flock 串行锁，杜绝并发写 soc_limit 触发厂商充电驱动内核死锁（此前手机充不进电的根因）；flock 用 -n 非阻塞（Android toybox 不支持 -w）
+- 优化：配置项统一到 /data/adb/bypass_charger/config.sh，逐行行尾注释标明功能，缺失项自动补默认值
 - 修复：WebUI「旁路中」判定改为后端 BYPASS 权威信号（精确模式下原来靠 smart_night 恒为 0 会显示不准）；巡检间隔滑块上限对齐为 600 秒
 - 修复：后端 set_key 增加恢复/停止阈值关系校验，恢复阈值 ≥ 停止阈值时拒绝写入；WebUI 保存时给出「永远都不会充电」提示
 - 注：安装器横幅由 ksud 硬编码生成，模块无法屏蔽，故采用补全信息方案
