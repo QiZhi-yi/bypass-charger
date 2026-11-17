@@ -124,11 +124,11 @@ ensure_conf() {
     [ -f "$_OLD_CONF" ] && cp "$_OLD_CONF" "$CONF_FILE" 2>/dev/null
   fi
   # 规范化：补齐缺失项、把行上方注释改成行尾注释。
-  # 只在不合规时重写一次，之后每次 status 都是纯读，开销可忽略。
+  # 用一次 grep -c 判断 7 个键是否齐全（避免 7 次 read_key 的进程开销），
+  # 再用一次 grep -q 判断是否已是行尾注释格式。不合规才重写一次，之后每次 status 都是纯读。
   _need=0
-  for _key in $CONF_KEYS; do
-    [ -z "$(read_key "$_key")" ] && _need=1
-  done
+  _n=$(grep -cE '^(ENABLED|ENABLE_THRESHOLD|DISABLE_THRESHOLD|CHECK_INTERVAL|SCHEDULE_ENABLED|SCHEDULE_START|SCHEDULE_END)=' "$CONF_FILE" 2>/dev/null)
+  [ "${_n:-0}" -lt 7 ] && _need=1
   grep -q '  # ' "$CONF_FILE" 2>/dev/null || _need=1
   [ "$_need" = "1" ] && render_conf
 }
@@ -197,9 +197,7 @@ set_key() {
 
 case "$1" in
   status)
-    # 诊断：把执行身份与工作目录打到 logcat，方便排查权限问题
     MYUID=$(id -u 2>/dev/null)
-    /system/bin/log -t bypass_webui "status uid=$MYUID cwd=$(pwd 2>/dev/null)" 2>/dev/null
 
     ensure_conf
     . "$CONF_FILE" 2>/dev/null
@@ -209,7 +207,7 @@ case "$1" in
 
     # 有 soc_limit 走精确模式（任意阈值），否则退回夜间充电模式（最低 80%）
     MODE=compat
-    if [ -n "$NODE" ] && [ -e "$(dirname "$NODE")/soc_limit" ]; then MODE=precise; fi
+    if [ -n "$NODE" ] && [ -e "${NODE%/*}/soc_limit" ]; then MODE=precise; fi
 
     # 版本号从 module.prop 动态读取，避免前端硬编码漏更新
     VER=$(sed -n 's/^version=//p' "$MODULE_DIR/module.prop" 2>/dev/null)
@@ -230,7 +228,7 @@ case "$1" in
     [ "$(cat /sys/class/power_supply/wireless/online 2>/dev/null)" = "1" ] && _pw=1
     if [ "$_pw" = "1" ]; then
       if [ "$MODE" = "precise" ]; then
-        _sl=$(cat "$(dirname "$NODE")/soc_limit" 2>/dev/null)
+        _sl=$(cat "${NODE%/*}/soc_limit" 2>/dev/null)
         case "$_sl" in ''|*[!0-9]*) _sl=100 ;; esac
         [ "$_sl" -lt 100 ] && BYPASS=1
       elif [ "$NODE_VAL" = "1" ]; then
@@ -332,7 +330,7 @@ case "$1" in
     if [ -n "$NODE" ]; then
       write_node "$NODE" 0
       # 精确模式：放开 soc_limit，避免上限残留导致不充电
-      _sd=$(dirname "$NODE")
+      _sd=${NODE%/*}
       [ -e "$_sd/soc_limit" ] && write_node "$_sd/soc_limit" 100
     fi
     echo "OK=stopped"
