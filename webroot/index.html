@@ -700,7 +700,6 @@
     withBusy(function(){
       return setKey("ENABLED", on ? "1" : "0").then(function(){
         opMsg(on ? "已启用旁路供电" : "已停用，恢复充电", true);
-        return waitUntil(function(s){ return (s.ENABLED === "1") === on; });
       });
     });
   });
@@ -775,20 +774,6 @@
       return run("/system/bin/sh " + SH + " start").then(function(){ toast("已启动守护进程"); });
     });
   });
-
-  function waitUntil(pred){
-    return new Promise(function(resolve){
-      var tries = 0;
-      var t = setInterval(function(){
-        tries++;
-        run("/system/bin/sh " + SH + " status").then(function(txt){
-          var s = parseKV(txt);
-          paint(s);
-          if (pred(s) || tries >= 8) { clearInterval(t); resolve(); }
-        }).catch(function(){ if (tries >= 8) { clearInterval(t); resolve(); } });
-      }, 2500);
-    });
-  }
 
   /* ---------------- 启动 ---------------- */
   if (!hasKsu()) {
