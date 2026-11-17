@@ -391,7 +391,7 @@
   function probeBridge(){
     if (!hasKsu()) return Promise.reject(new Error("未检测到 ksu 对象"));
     BRIDGE_TRIED = [];
-    var modes = [1, 2, 3];
+    var modes = [2, 3, 1];   // 优先异步签名，避免同步 ksu.exec 阻塞 JS 主线程导致界面卡死
     var i = 0;
     function next(){
       if (i >= modes.length) {
@@ -678,11 +678,18 @@
     opMsg("");
     el("swEnable").disabled = true;
     el("swSched").disabled = true;
+    // 操作期间禁用所有按钮，防止连点排队多个保存导致卡死
+    el("btnSave").disabled = true;
+    el("btnSchedSave").disabled = true;
+    el("btnStart").disabled = true;
     Promise.resolve()
       .then(fn)
       .catch(function(e){ opMsg("操作失败：" + e.message, false); })
       .then(function(){
         busy = false;
+        el("btnSave").disabled = false;
+        el("btnSchedSave").disabled = false;
+        el("btnStart").disabled = false;
         setTimeout(function(){ refresh(); refreshLog(); }, 700);
       });
   }
