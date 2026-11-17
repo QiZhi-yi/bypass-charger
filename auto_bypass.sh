@@ -111,7 +111,7 @@ lg "控制节点: $CONTROL_FILE"
 #   soc_limit=N   → 精确上限，写 100 立刻恢复充电，写小于当前电量的值立刻停充
 # 所以有 soc_limit 的机型走它，没有的才退回 smart_night。
 SOC_LIMIT_FILE=""
-_d=$(dirname "$CONTROL_FILE")
+_d=${CONTROL_FILE%/*}
 [ -e "$_d/soc_limit" ] && SOC_LIMIT_FILE="$_d/soc_limit"
 if [ -n "$SOC_LIMIT_FILE" ]; then
   lg "充电上限节点: $SOC_LIMIT_FILE（精确模式）"
@@ -216,9 +216,9 @@ restore_charge() {
     _cl=$(cat "$SOC_LIMIT_FILE" 2>/dev/null)
     [ "$_cl" != "100" ] && write_node "$SOC_LIMIT_FILE" 100
   fi
-  # 兼容模式：清掉夜间充电（旁路）标记
-    _c=$(cat "$CONTROL_FILE" 2>/dev/null)
-    [ "$_c" != "0" ] && write_node "$CONTROL_FILE" 0
+  # 兼容模式：清掉夜间充电（旁路）标记；精确模式也一并清，防止残留
+  _c=$(cat "$CONTROL_FILE" 2>/dev/null)
+  [ "$_c" != "0" ] && write_node "$CONTROL_FILE" 0
 }
 
 # ---------- 首次生成默认配置（含旧版迁移）----------
@@ -272,10 +272,24 @@ while :; do
   [ -z "$ENABLE_THRESHOLD" ] && ENABLE_THRESHOLD=80
   [ -z "$DISABLE_THRESHOLD" ] && DISABLE_THRESHOLD=75
   [ -z "$CHECK_INTERVAL" ] && CHECK_INTERVAL=15
-  [ "$CHECK_INTERVAL" -lt 5 ] 2>/dev/null && CHECK_INTERVAL=5
   [ -z "$SCHEDULE_ENABLED" ] && SCHEDULE_ENABLED=0
   [ -z "$SCHEDULE_START" ] && SCHEDULE_START="23:00"
   [ -z "$SCHEDULE_END" ] && SCHEDULE_END="07:00"
+  # 数值兜底：手动改配置可能写坏（非数字/越界），一律用默认/边界值纠正，
+  # 避免 sleep 非数字导致 busy loop、数值比较报错、以及超长睡眠不再巡检。
+  case "$ENABLED" in ''|*[!0-9]*) ENABLED=1 ;; esac
+  case "$ENABLE_THRESHOLD" in ''|*[!0-9]*) ENABLE_THRESHOLD=80 ;; esac
+  [ "$ENABLE_THRESHOLD" -lt 1 ] && ENABLE_THRESHOLD=1
+  [ "$ENABLE_THRESHOLD" -gt 100 ] && ENABLE_THRESHOLD=100
+  case "$DISABLE_THRESHOLD" in ''|*[!0-9]*) DISABLE_THRESHOLD=75 ;; esac
+  [ "$DISABLE_THRESHOLD" -lt 1 ] && DISABLE_THRESHOLD=1
+  [ "$DISABLE_THRESHOLD" -gt 100 ] && DISABLE_THRESHOLD=100
+  case "$CHECK_INTERVAL" in ''|*[!0-9]*) CHECK_INTERVAL=15 ;; esac
+  [ "$CHECK_INTERVAL" -lt 5 ] && CHECK_INTERVAL=5
+  [ "$CHECK_INTERVAL" -gt 600 ] && CHECK_INTERVAL=600
+  case "$SCHEDULE_ENABLED" in ''|*[!0-9]*) SCHEDULE_ENABLED=0 ;; esac
+  case "$SCHEDULE_START" in [01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;; *) SCHEDULE_START="23:00" ;; esac
+  case "$SCHEDULE_END" in [01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;; *) SCHEDULE_END="07:00" ;; esac
 
   # 空闲间隔不能比正常巡检更勤快（用户把 CHECK_INTERVAL 设 600 秒时尤其重要）
   idle=$IDLE_INTERVAL
