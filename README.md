@@ -474,6 +474,16 @@ adb logcat -s bypass_webui
 
 ## 更新日志
 
+### v10.3.6
+
+- **性能：WebUI 状态读取提速** —— 去掉 `status` 每次调用都写 logcat 的冗余诊断，
+  配置完整性检查由 7 次 `read_key` 改为一次 `grep` 判断，`dirname` 改为 shell 参数展开，读取耗时明显下降。
+- **性能：总开关响应提速** —— 移除开关后固定 2.5 秒的 `waitUntil` 轮询，写配置后立即返回。
+- **修复：连点「保存」界面卡死** —— 前端优先使用异步 `ksu.exec` 签名（避免阻塞主线程），
+  操作期间禁用所有按钮防止连点排队。
+- **修复：守护进程配置兜底** —— 对数值键做非数字/越界纠正，手动改坏 `config.sh`
+  （如把 `CHECK_INTERVAL` 写成非数字）不再导致 busy loop 高耗电。
+
 ### v10.3.5
 
 - **调整安装日志署名**：root 方案安装器（KSU/Magisk）会依据 `module.prop` 的 `author`
